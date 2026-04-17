@@ -29,4 +29,5 @@ COPY --from=builder /app/delivery-settings.json ./delivery-settings.json
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start", "--", "--port", "3000"]
+# Respect PORT from the platform (do not hardcode). Next reads process.env.PORT.
+CMD ["npm", "run", "start"]
