@@ -219,6 +219,36 @@ button.card > div:last-child {
   margin-top: 4px;
 }
 
+/* Checkout: avoid fixed 320px column on phones — stack summary under forms */
+.checkout-page-grid {
+  display: grid;
+  grid-template-columns: 1fr min(320px, 100%);
+  gap: 20px;
+  align-items: start;
+}
+
+.checkout-page-grid > * {
+  min-width: 0;
+}
+
+@media (min-width: 901px) {
+  .checkout-page-grid {
+    grid-template-columns: 1fr 320px;
+  }
+}
+
+.checkout-summary-aside {
+  position: sticky;
+  top: 80px;
+  align-self: start;
+}
+
+.checkout-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 .site-footer {
   margin-top: 40px;
   border-top: 1px solid var(--border);
@@ -337,6 +367,19 @@ button.card > div:last-child {
     position: static !important;
     top: auto !important;
     margin-top: 2px;
+  }
+
+  .checkout-page-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  .checkout-summary-aside {
+    position: static !important;
+  }
+
+  .checkout-two-col {
+    grid-template-columns: 1fr !important;
   }
 
   .home-bg-orb {
