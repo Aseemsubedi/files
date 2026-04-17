@@ -219,6 +219,64 @@ button.card > div:last-child {
   margin-top: 4px;
 }
 
+/* Checkout: was inline 1fr + 320px grid — on phones the summary column forced overflow */
+.checkout-page-grid {
+  display: grid;
+  grid-template-columns: 1fr min(320px, 100%);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (min-width: 901px) {
+  .checkout-page-grid {
+    grid-template-columns: 1fr 320px;
+  }
+}
+
+.checkout-summary-aside {
+  position: sticky;
+  top: 80px;
+  align-self: start;
+}
+
+.checkout-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.cart-panel-root {
+  position: sticky;
+  top: 80px;
+  padding: 16px;
+}
+
+.cart-line-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.cart-line-actions strong {
+  margin-left: auto;
+  min-width: 3.5rem;
+  text-align: right;
+}
+
+.cart-panel-fees {
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+@media (max-width: 480px) {
+  .cart-line-actions strong {
+    flex: 1 1 100%;
+    margin-left: 0;
+    text-align: left;
+  }
+}
+
 .site-footer {
   margin-top: 40px;
   border-top: 1px solid var(--border);
@@ -337,6 +395,20 @@ button.card > div:last-child {
     position: static !important;
     top: auto !important;
     margin-top: 2px;
+  }
+
+  .checkout-page-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  .checkout-summary-aside {
+    position: static !important;
+    order: -1;
+  }
+
+  .checkout-two-col {
+    grid-template-columns: 1fr !important;
   }
 
   .home-bg-orb {
