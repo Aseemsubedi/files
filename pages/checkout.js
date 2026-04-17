@@ -5,6 +5,7 @@ import Nav from "../components/Nav"
 import { useCart } from "../lib/cartContext"
 import { checkDeliveryZone } from "../lib/geo"
 import { formatMoney } from "../lib/menu"
+import { SITE_PHONE_DISPLAY, SITE_PHONE_TEL } from "../lib/siteContact"
 
 const looksLikePlaceholder = (value) => !value || /x{6,}/i.test(value)
 const hasStripePublishableKey =
@@ -234,6 +235,13 @@ function CheckoutInner() {
             <Field label="Last name" value={form.lastName} onChange={(v) => update("lastName", v)} error={errors.lastName} autoComplete="family-name" />
           </TwoCol>
           <PhoneField label="Phone" value={form.phone} onChange={(v) => update("phone", v)} error={errors.phone} autoComplete="tel" />
+          <p style={{ margin: "-4px 0 12px", fontSize: 13, color: "var(--muted)" }}>
+            Need help? Call{" "}
+            <a href={SITE_PHONE_TEL} style={{ color: "var(--terra)", fontWeight: 600 }}>
+              {SITE_PHONE_DISPLAY}
+            </a>
+            .
+          </p>
           <Field label="Email" value={form.email} onChange={(v) => update("email", v)} error={errors.email} autoComplete="email" />
         </section>
 

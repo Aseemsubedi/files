@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { SITE_PHONE_DISPLAY, SITE_PHONE_TEL } from "../lib/siteContact"
 
 const quickLinks = [
   { href: "/", label: "Home" },
@@ -35,6 +36,11 @@ export default function Footer({ compact = false }) {
 
         <div>
           <p className="site-footer-heading">Contact</p>
+          <p className="site-footer-copy">
+            <a href={SITE_PHONE_TEL} style={{ color: "inherit", fontWeight: 600 }}>
+              {SITE_PHONE_DISPLAY}
+            </a>
+          </p>
           <p className="site-footer-copy">Riverdale, Melbourne VIC</p>
           <p className="site-footer-copy">Delivery available daily</p>
           <p className="site-footer-copy">Secure card checkout with Stripe.</p>
