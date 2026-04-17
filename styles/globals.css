@@ -154,6 +154,26 @@ button:focus-visible {
   border: 1px solid var(--border);
 }
 
+/*
+  Menu item tiles use <button class="card">. On iOS Safari, button text can
+  appear as default link blue. Force theme colors and native reset.
+*/
+button.card {
+  color: var(--ink);
+  background: var(--white);
+  -webkit-appearance: none;
+  appearance: none;
+  font: inherit;
+}
+
+button.card h3 {
+  color: var(--ink);
+}
+
+button.card > div:last-child {
+  color: var(--ink);
+}
+
 .pill {
   border-radius: 999px;
   padding: 4px 10px;
