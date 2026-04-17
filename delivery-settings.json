@@ -1,0 +1,6 @@
+{
+  "radiusNearKm": 3,
+  "feeNear": 8,
+  "radiusFarKm": 5,
+  "feeFar": 12
+}
