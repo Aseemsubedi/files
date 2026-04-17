@@ -225,7 +225,7 @@ function CheckoutInner() {
   }
 
   return (
-    <main className="container checkout-page-grid" style={{ padding: "30px 0 50px" }}>
+    <main className="container" style={{ padding: "30px 0 50px", display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}>
       <div>
         <section className="card" style={{ padding: 18, marginBottom: 14 }}>
           <h3>1. Your details</h3>
@@ -344,7 +344,7 @@ function CheckoutInner() {
         </button>
       </div>
 
-      <aside className="card checkout-summary-aside" style={{ padding: 16, height: "fit-content" }}>
+      <aside className="card" style={{ padding: 16, position: "sticky", top: 80, height: "fit-content" }}>
         <h3>Order summary</h3>
         {items.length === 0 ? (
           <p style={{ color: "var(--muted)" }}>No items yet.</p>
@@ -451,7 +451,7 @@ function PhoneField({ label, value, onChange, error, autoComplete = "tel" }) {
 }
 
 function TwoCol({ children }) {
-  return <div className="checkout-two-col">{children}</div>
+  return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>{children}</div>
 }
 
 export default function CheckoutPage() {

@@ -26,7 +26,7 @@ export default function CartPanel({ compactOnMobile = false }) {
   }, [])
 
   return (
-    <div className={`card cart-panel-root ${compactOnMobile ? "cart-panel-mobile" : ""}`}>
+    <div className={`card ${compactOnMobile ? "cart-panel-mobile" : ""}`} style={{ position: "sticky", top: 80, padding: 16 }}>
       <h3 style={{ marginBottom: 4 }}>Your order</h3>
       <p style={{ marginTop: 0, color: "var(--muted)" }}>
         {items.length ? `${items.length} item(s)` : "Add items to get started"}
@@ -41,7 +41,7 @@ export default function CartPanel({ compactOnMobile = false }) {
               <div style={{ fontSize: 12, color: "var(--muted)" }}>
                 {[item.size, item.spice, item.milk, item.sugar, item.ice, ...(item.syrups || []), ...(item.extras || [])].filter(Boolean).join(" · ")}
               </div>
-              <div className="cart-line-actions" style={{ marginTop: 6 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
                 <button className="btn btn-secondary" onClick={() => updateQty(item.uid, item.qty - 1)} type="button">
                   -
                 </button>
@@ -67,7 +67,7 @@ export default function CartPanel({ compactOnMobile = false }) {
           <span>Delivery (from)</span>
           <span>{formatMoney(deliverySettings.feeNear)}</span>
         </div>
-        <div className="cart-panel-fees" style={{ color: "var(--muted)", fontSize: 12 }}>
+        <div style={{ color: "var(--muted)", fontSize: 12 }}>
           Up to {deliverySettings.radiusNearKm}km: {formatMoney(deliverySettings.feeNear)} · {deliverySettings.radiusNearKm + 0.1}km to {deliverySettings.radiusFarKm}km: {formatMoney(deliverySettings.feeFar)}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontWeight: 700 }}>
