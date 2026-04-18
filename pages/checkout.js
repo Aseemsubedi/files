@@ -235,13 +235,6 @@ function CheckoutInner() {
             <Field label="Last name" value={form.lastName} onChange={(v) => update("lastName", v)} error={errors.lastName} autoComplete="family-name" />
           </TwoCol>
           <PhoneField label="Phone" value={form.phone} onChange={(v) => update("phone", v)} error={errors.phone} autoComplete="tel" />
-          <p style={{ margin: "-4px 0 12px", fontSize: 13, color: "var(--muted)" }}>
-            Need help? Call{" "}
-            <a href={SITE_PHONE_TEL} style={{ color: "var(--terra)", fontWeight: 600 }}>
-              {SITE_PHONE_DISPLAY}
-            </a>
-            .
-          </p>
           <Field label="Email" value={form.email} onChange={(v) => update("email", v)} error={errors.email} autoComplete="email" />
         </section>
 
@@ -305,8 +298,12 @@ function CheckoutInner() {
               </span>
             </div>
           </div>
-          <p style={{ marginTop: 4, marginBottom: 10, color: "var(--muted)", fontSize: 13 }}>
-            Allow location access to calculate the correct delivery fee for your address.
+          <p style={{ marginTop: 4, marginBottom: 10, color: "var(--muted)", fontSize: 13, lineHeight: 1.45 }}>
+            Allow location access to calculate the correct delivery fee for your address. Need help? Call{" "}
+            <a href={SITE_PHONE_TEL} style={{ color: "var(--terra)", fontWeight: 600 }}>
+              {SITE_PHONE_DISPLAY}
+            </a>
+            .
           </p>
           <button type="button" className="btn btn-secondary" onClick={verifyGeo}>
             Verify my location to calculate delivery fee
