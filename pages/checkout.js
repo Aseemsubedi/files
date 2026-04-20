@@ -61,6 +61,7 @@ function CheckoutInner() {
   const [confirmation, setConfirmation] = useState(false)
   const [placeCoords, setPlaceCoords] = useState(null)
   const [placeFormatted, setPlaceFormatted] = useState("")
+  const [verifying, setVerifying] = useState(false)
 
   const orderRef = useMemo(() => generateRef(), [])
 
@@ -102,7 +103,16 @@ function CheckoutInner() {
     return Object.keys(next).length === 0
   }
 
-  const verifyGeo = () => {
+  // When NEXT_PUBLIC_DISTANCE_MODE === "driving", we ask /api/route-distance
+  // for the actual road distance from the store; otherwise we use straight-line
+  // haversine (free, fast, slightly under-counts in greenfield suburbs like
+  // Tarneit where the road grid is incomplete).
+  const distanceMode =
+    (process.env.NEXT_PUBLIC_DISTANCE_MODE || "haversine").toLowerCase() === "driving"
+      ? "driving"
+      : "haversine"
+
+  const verifyGeo = async () => {
     if (!placeCoords || !Number.isFinite(placeCoords.lat) || !Number.isFinite(placeCoords.lng)) {
       setGeoState({
         checked: false,
@@ -114,17 +124,9 @@ function CheckoutInner() {
     }
 
     const store = getStoreCenter()
-    const distance = haversineKm(placeCoords.lat, placeCoords.lng, store.lat, store.lng)
-    // One-line diagnostic so we can verify coords in production via devtools.
-    // eslint-disable-next-line no-console
-    console.info("[Checkout] verifyGeo", {
-      store,
-      placeCoords,
-      distanceKm: distance,
-      envStoreLat: process.env.NEXT_PUBLIC_STORE_LAT,
-      envStoreLng: process.env.NEXT_PUBLIC_STORE_LNG
-    })
-    if (!Number.isFinite(distance)) {
+    const straightKm = haversineKm(placeCoords.lat, placeCoords.lng, store.lat, store.lng)
+
+    if (!Number.isFinite(straightKm)) {
       setGeoState({
         checked: true,
         ok: false,
@@ -134,14 +136,11 @@ function CheckoutInner() {
       return { ok: false, skipped: false, distance: null }
     }
     // Sanity check — only reject physically-impossible distances (swapped axis,
-    // non-Australian coords that slipped through the bounding box, etc). Real
-    // Australian addresses can legitimately be thousands of km from Melbourne
-    // (e.g. Perth ≈ 2 700 km), so don't reject them here — let the normal
-    // delivery-zone check tell the customer the distance.
-    if (distance > 5000) {
+    // non-Australian coords that slipped through the bounding box, etc).
+    if (straightKm > 5000) {
       // eslint-disable-next-line no-console
       console.warn("[Checkout] Implausible distance from store, rejecting.", {
-        distance,
+        straightKm,
         placeCoords,
         store
       })
@@ -153,14 +152,66 @@ function CheckoutInner() {
       })
       return { ok: false, skipped: false, distance: null }
     }
+
+    // Optionally upgrade to driving distance via Routes API. We wrap in a
+    // try/catch so a Routes API outage falls back silently to haversine and
+    // checkout never blocks on a third-party API.
+    let distance = straightKm
+    let measure = "straight-line"
+    let driveMin = null
+    if (distanceMode === "driving") {
+      setVerifying(true)
+      try {
+        const res = await fetch("/api/route-distance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            originLat: store.lat,
+            originLng: store.lng,
+            destLat: placeCoords.lat,
+            destLng: placeCoords.lng
+          })
+        })
+        const json = await res.json().catch(() => ({}))
+        if (res.ok && Number.isFinite(json?.driveKm)) {
+          distance = json.driveKm
+          measure = "driving"
+          driveMin = Number.isFinite(json?.driveMin) ? json.driveMin : null
+        } else {
+          // eslint-disable-next-line no-console
+          console.warn("[Checkout] route-distance failed, falling back to haversine.", json?.error)
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[Checkout] route-distance threw, falling back to haversine.", err)
+      } finally {
+        setVerifying(false)
+      }
+    }
+
+    // eslint-disable-next-line no-console
+    console.info("[Checkout] verifyGeo", {
+      store,
+      placeCoords,
+      mode: distanceMode,
+      measure,
+      straightKm,
+      distance,
+      driveMin,
+      envStoreLat: process.env.NEXT_PUBLIC_STORE_LAT,
+      envStoreLng: process.env.NEXT_PUBLIC_STORE_LNG
+    })
+
     const effectiveRadius = Number(deliverySettings.radiusFarKm || 5) + getStoreBufferKm()
+    const measureLabel = measure === "driving" ? "by road" : "away"
+    const driveTag = driveMin != null ? ` (≈${driveMin} min drive)` : ""
     if (distance <= effectiveRadius) {
       const fee = resolveDeliveryFee(distance)
       setDeliveryFee(fee)
       setGeoState({
         checked: true,
         ok: true,
-        text: `You're within our delivery zone (${distance.toFixed(1)} km away). Delivery: ${formatMoney(fee)}`,
+        text: `You're within our delivery zone (${distance.toFixed(1)} km ${measureLabel}${driveTag}). Delivery: ${formatMoney(fee)}`,
         distance
       })
       return { ok: true, skipped: false, distance }
@@ -168,7 +219,7 @@ function CheckoutInner() {
     setGeoState({
       checked: true,
       ok: false,
-      text: `That address is ${distance.toFixed(1)} km away — outside our ${effectiveRadius.toFixed(0)} km delivery zone. Please call Riverdale to arrange this order.`,
+      text: `That address is ${distance.toFixed(1)} km ${measureLabel}${driveTag} — outside our ${effectiveRadius.toFixed(0)} km delivery zone. Please call Riverdale to arrange this order.`,
       distance
     })
     return { ok: false, skipped: false, distance }
@@ -377,10 +428,10 @@ function CheckoutInner() {
             type="button"
             className="btn btn-secondary"
             onClick={verifyGeo}
-            disabled={!placeCoords}
-            style={!placeCoords ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
+            disabled={!placeCoords || verifying}
+            style={!placeCoords || verifying ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
           >
-            Confirm delivery fee
+            {verifying ? "Checking distance…" : "Confirm delivery fee"}
           </button>
           {geoState.text ? (
             <div
