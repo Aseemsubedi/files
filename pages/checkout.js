@@ -133,9 +133,12 @@ function CheckoutInner() {
       })
       return { ok: false, skipped: false, distance: null }
     }
-    // Sanity check — if the distance is wildly out (e.g. a Places response
-    // returned non-Australian coords or a swapped axis), don't trust it.
-    if (distance > 200) {
+    // Sanity check — only reject physically-impossible distances (swapped axis,
+    // non-Australian coords that slipped through the bounding box, etc). Real
+    // Australian addresses can legitimately be thousands of km from Melbourne
+    // (e.g. Perth ≈ 2 700 km), so don't reject them here — let the normal
+    // delivery-zone check tell the customer the distance.
+    if (distance > 5000) {
       // eslint-disable-next-line no-console
       console.warn("[Checkout] Implausible distance from store, rejecting.", {
         distance,
@@ -145,7 +148,7 @@ function CheckoutInner() {
       setGeoState({
         checked: true,
         ok: false,
-        text: "That address looks outside Melbourne. Please pick a local Australian address from the suggestions, or call Riverdale for help.",
+        text: "We couldn't verify that address on the map. Please re-select it from the suggestions, or call Riverdale to place your order.",
         distance: null
       })
       return { ok: false, skipped: false, distance: null }
@@ -165,7 +168,7 @@ function CheckoutInner() {
     setGeoState({
       checked: true,
       ok: false,
-      text: `Outside delivery zone (${distance.toFixed(1)}km). Please contact Riverdale before placing this order.`,
+      text: `That address is ${distance.toFixed(1)} km away — outside our ${effectiveRadius.toFixed(0)} km delivery zone. Please call Riverdale to arrange this order.`,
       distance
     })
     return { ok: false, skipped: false, distance }
