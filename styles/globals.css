@@ -373,6 +373,7 @@ button.card > div:last-child {
 /* New Google PlaceAutocompleteElement (web component) styling */
 .place-autocomplete-host {
   width: 100%;
+  min-height: 46px;
 }
 .place-autocomplete-host.error gmp-place-autocomplete,
 .place-autocomplete-host.error .place-autocomplete-el {

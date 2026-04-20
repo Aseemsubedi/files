@@ -469,7 +469,20 @@ function AddressAutocompleteField({ label, value, onChange, onSelect, error, pla
 
     loadGoogleMaps()
       .then(async (g) => {
-        if (cancelled || !g || elRef.current || !hostRef.current) return
+        if (cancelled) return
+        if (!g) {
+          // eslint-disable-next-line no-console
+          console.warn("[Checkout] Google Maps unavailable — using manual address input.")
+          setUseFallback(true)
+          return
+        }
+        if (!hostRef.current) return
+        // If Fast Refresh left behind an element that is no longer in the DOM,
+        // clear the ref so we append a fresh one instead of silently bailing.
+        if (elRef.current && !hostRef.current.contains(elRef.current)) {
+          elRef.current = null
+        }
+        if (elRef.current) return
         let PlaceAutocompleteElement
         try {
           const places =
