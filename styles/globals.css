@@ -219,6 +219,37 @@ button.card > div:last-child {
   margin-top: 4px;
 }
 
+/* Google Places Autocomplete dropdown — match site type, stay above modals */
+.pac-container {
+  z-index: 2000;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 32px rgba(26, 23, 16, 0.12);
+  font-family: "DM Sans", sans-serif;
+  margin-top: 6px;
+}
+
+.pac-item {
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--ink);
+  border-top: 1px solid rgba(26, 23, 16, 0.06);
+}
+
+.pac-item:first-child {
+  border-top: 0;
+}
+
+.pac-item:hover,
+.pac-item-selected {
+  background: rgba(196, 98, 45, 0.08);
+}
+
+.pac-matched {
+  color: var(--terra);
+  font-weight: 600;
+}
+
 /* Checkout: avoid fixed 320px column on phones — stack summary under forms */
 .checkout-page-grid {
   display: grid;

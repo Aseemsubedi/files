@@ -1,9 +1,10 @@
 import { CardCvcElement, CardExpiryElement, CardNumberElement, Elements, useElements, useStripe } from "@stripe/react-stripe-js"
 import { loadStripe } from "@stripe/stripe-js"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Nav from "../components/Nav"
 import { useCart } from "../lib/cartContext"
-import { checkDeliveryZone } from "../lib/geo"
+import { checkDeliveryZone, getStoreBufferKm, getStoreCenter, haversineKm } from "../lib/geo"
+import { hasGoogleMapsKey, loadGoogleMaps } from "../lib/googleMapsLoader"
 import { formatMoney } from "../lib/menu"
 import { SITE_PHONE_DISPLAY, SITE_PHONE_TEL } from "../lib/siteContact"
 
@@ -58,6 +59,7 @@ function CheckoutInner() {
   const [loading, setLoading] = useState(false)
   const [geoState, setGeoState] = useState({ checked: false, ok: true, text: "" })
   const [confirmation, setConfirmation] = useState(false)
+  const [placeCoords, setPlaceCoords] = useState(null)
 
   const orderRef = useMemo(() => generateRef(), [])
 
@@ -101,13 +103,36 @@ function CheckoutInner() {
 
   const verifyGeo = async () => {
     setGeoState({ checked: true, ok: true, text: "Checking location..." })
+
+    if (placeCoords) {
+      const store = getStoreCenter()
+      const distance = haversineKm(placeCoords.lat, placeCoords.lng, store.lat, store.lng)
+      const effectiveRadius = Number(deliverySettings.radiusFarKm || 5) + getStoreBufferKm()
+      if (distance <= effectiveRadius) {
+        const fee = resolveDeliveryFee(distance)
+        setDeliveryFee(fee)
+        setGeoState({
+          checked: true,
+          ok: true,
+          text: `You're within range (${distance.toFixed(1)}km by air). Delivery: ${formatMoney(fee)}`
+        })
+        return { ok: true, skipped: false, distance }
+      }
+      setGeoState({
+        checked: true,
+        ok: false,
+        text: `Outside delivery zone (${distance.toFixed(1)}km). Please contact Riverdale before placing this order.`
+      })
+      return { ok: false, skipped: false, distance }
+    }
+
     const result = await checkDeliveryZone(deliverySettings.radiusFarKm)
     if (result.skipped) {
       setDeliveryFee(resolveDeliveryFee(null))
       setGeoState({
         checked: true,
         ok: true,
-        text: "Please allow location access to calculate accurate delivery rates. Using default rate for now."
+        text: "Pick your address from the suggestions, or allow location access, to calculate delivery."
       })
       return { ok: true, skipped: true, distance: null }
     }
@@ -240,13 +265,25 @@ function CheckoutInner() {
 
         <section className="card" style={{ padding: 18, marginBottom: 14 }}>
           <h3>2. Delivery</h3>
-          <Field
+          <AddressAutocompleteField
             label="Street address"
             value={form.address}
-            onChange={(v) => update("address", v)}
+            onChange={(v) => {
+              update("address", v)
+              if (placeCoords) setPlaceCoords(null)
+            }}
             error={errors.address}
-            placeholder="e.g. 123 Collins St"
+            placeholder="Start typing your address"
             autoComplete="street-address"
+            onSelect={({ street, suburb, postcode, lat, lng }) => {
+              setForm((prev) => ({
+                ...prev,
+                address: street || prev.address,
+                suburb: suburb || prev.suburb,
+                postcode: postcode || prev.postcode
+              }))
+              setPlaceCoords({ lat, lng })
+            }}
           />
           <TwoCol>
             <Field
@@ -299,14 +336,17 @@ function CheckoutInner() {
             </div>
           </div>
           <p style={{ marginTop: 4, marginBottom: 10, color: "var(--muted)", fontSize: 13, lineHeight: 1.45 }}>
-            Allow location access to calculate the correct delivery fee for your address. Need help? Call{" "}
+            {placeCoords
+              ? "Confirm your delivery fee for the selected address."
+              : "Pick your address from the suggestions, or allow location access, to calculate the delivery fee."}{" "}
+            Need help? Call{" "}
             <a href={SITE_PHONE_TEL} style={{ color: "var(--terra)", fontWeight: 600 }}>
               {SITE_PHONE_DISPLAY}
             </a>
             .
           </p>
           <button type="button" className="btn btn-secondary" onClick={verifyGeo}>
-            Verify my location to calculate delivery fee
+            {placeCoords ? "Confirm delivery fee" : "Use my current location instead"}
           </button>
           {geoState.checked ? <p style={{ color: geoState.ok ? "var(--sage)" : "#cf3c2c" }}>{geoState.text}</p> : null}
         </section>
@@ -373,6 +413,77 @@ function CheckoutInner() {
         </div>
       </aside>
     </main>
+  )
+}
+
+function AddressAutocompleteField({ label, value, onChange, onSelect, error, placeholder, autoComplete = "street-address" }) {
+  const inputRef = useRef(null)
+  const acRef = useRef(null)
+  const onSelectRef = useRef(onSelect)
+  onSelectRef.current = onSelect
+
+  useEffect(() => {
+    let cancelled = false
+    if (!inputRef.current || !hasGoogleMapsKey()) return undefined
+
+    loadGoogleMaps()
+      .then((g) => {
+        if (cancelled || !g || acRef.current || !inputRef.current) return
+        const ac = new g.maps.places.Autocomplete(inputRef.current, {
+          componentRestrictions: { country: "au" },
+          fields: ["address_components", "geometry", "formatted_address"],
+          types: ["address"]
+        })
+        ac.addListener("place_changed", () => {
+          const place = ac.getPlace()
+          if (!place?.geometry?.location) return
+          const comps = place.address_components || []
+          const get = (type) => comps.find((c) => c.types.includes(type))?.long_name || ""
+          const number = get("street_number")
+          const route = get("route")
+          const street = [number, route].filter(Boolean).join(" ").trim()
+          const suburb = get("locality") || get("sublocality") || get("postal_town")
+          const postcode = get("postal_code")
+          const lat = place.geometry.location.lat()
+          const lng = place.geometry.location.lng()
+          const formatted = place.formatted_address || ""
+          if (inputRef.current) inputRef.current.value = street || formatted
+          onSelectRef.current?.({
+            street: street || formatted,
+            suburb,
+            postcode,
+            lat,
+            lng,
+            formatted
+          })
+        })
+        acRef.current = ac
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 5, fontSize: 12, color: "var(--muted)", textTransform: "uppercase" }}>{label}</div>
+      <input
+        ref={inputRef}
+        className={`input ${error ? "error" : ""}`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+      />
+      {error ? <div className="err">{error}</div> : null}
+      {!hasGoogleMapsKey() ? (
+        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+          Address autocomplete unavailable — type your address manually.
+        </div>
+      ) : null}
+    </div>
   )
 }
 
