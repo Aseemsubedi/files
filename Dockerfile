@@ -22,6 +22,7 @@ COPY --from=builder /app/components ./components
 COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/styles ./styles
 COPY --from=builder /app/next.config.js ./next.config.js
+COPY --from=builder /app/server.js ./server.js
 COPY --from=builder /app/orders.json ./orders.json
 COPY --from=builder /app/menu-availability.json ./menu-availability.json
 COPY --from=builder /app/store-status.json ./store-status.json
