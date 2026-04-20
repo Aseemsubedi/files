@@ -103,7 +103,7 @@ function CheckoutInner() {
   }
 
   const verifyGeo = () => {
-    if (!placeCoords) {
+    if (!placeCoords || !Number.isFinite(placeCoords.lat) || !Number.isFinite(placeCoords.lng)) {
       setGeoState({
         checked: false,
         ok: false,
@@ -114,7 +114,42 @@ function CheckoutInner() {
     }
 
     const store = getStoreCenter()
+    if (!Number.isFinite(store.lat) || !Number.isFinite(store.lng)) {
+      setGeoState({
+        checked: true,
+        ok: false,
+        text: "We couldn't locate our store on the map. Please call Riverdale to place your order.",
+        distance: null
+      })
+      return { ok: false, skipped: false, distance: null }
+    }
     const distance = haversineKm(placeCoords.lat, placeCoords.lng, store.lat, store.lng)
+    if (!Number.isFinite(distance)) {
+      setGeoState({
+        checked: true,
+        ok: false,
+        text: "We couldn't calculate the distance to your address. Please re-select your address from the suggestions.",
+        distance: null
+      })
+      return { ok: false, skipped: false, distance: null }
+    }
+    // Sanity check — if the distance is wildly out (e.g. a Places response
+    // returned non-Australian coords or a swapped axis), don't trust it.
+    if (distance > 200) {
+      // eslint-disable-next-line no-console
+      console.warn("[Checkout] Implausible distance from store, rejecting.", {
+        distance,
+        placeCoords,
+        store
+      })
+      setGeoState({
+        checked: true,
+        ok: false,
+        text: "That address looks outside Melbourne. Please pick a local Australian address from the suggestions, or call Riverdale for help.",
+        distance: null
+      })
+      return { ok: false, skipped: false, distance: null }
+    }
     const effectiveRadius = Number(deliverySettings.radiusFarKm || 5) + getStoreBufferKm()
     if (distance <= effectiveRadius) {
       const fee = resolveDeliveryFee(distance)
@@ -266,8 +301,13 @@ function CheckoutInner() {
                 suburb: suburb || prev.suburb,
                 postcode: postcode || prev.postcode
               }))
-              setPlaceCoords({ lat, lng })
+              if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                setPlaceCoords({ lat, lng })
+              } else {
+                setPlaceCoords(null)
+              }
               setPlaceFormatted(formatted || "")
+              setGeoState({ checked: false, ok: true, text: "", distance: null })
             }}
           />
           <TwoCol>
@@ -511,11 +551,83 @@ function AddressAutocompleteField({ label, value, onChange, onSelect, error, pla
             const street = [number, route].filter(Boolean).join(" ").trim()
             const suburb = get("locality") || get("sublocality") || get("postal_town")
             const postcode = get("postal_code")
-            const loc = place.location
-            const lat = typeof loc?.lat === "function" ? loc.lat() : loc?.lat
-            const lng = typeof loc?.lng === "function" ? loc.lng() : loc?.lng
+
+            // Robust lat/lng extraction. Google's Place API exposes `location` in
+            // multiple shapes across versions: a LatLng with lat()/lng() methods,
+            // a plain {lat, lng}, or {latitude, longitude}. Also check geometry.location
+            // and toJSON() as final fallbacks.
+            const extractLatLng = (p) => {
+              const candidates = []
+              if (p?.location) candidates.push(p.location)
+              if (p?.geometry?.location) candidates.push(p.geometry.location)
+              if (typeof p?.toJSON === "function") {
+                try {
+                  const j = p.toJSON()
+                  if (j?.location) candidates.push(j.location)
+                  if (j?.geometry?.location) candidates.push(j.geometry.location)
+                } catch {}
+              }
+              for (const loc of candidates) {
+                if (!loc) continue
+                let lat, lng
+                if (typeof loc.lat === "function") lat = loc.lat()
+                else if (typeof loc.lat === "number") lat = loc.lat
+                else if (typeof loc.latitude === "number") lat = loc.latitude
+                if (typeof loc.lng === "function") lng = loc.lng()
+                else if (typeof loc.lng === "number") lng = loc.lng
+                else if (typeof loc.longitude === "number") lng = loc.longitude
+                if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                  return { lat, lng }
+                }
+              }
+              return { lat: undefined, lng: undefined }
+            }
+            const { lat, lng } = extractLatLng(place)
             const formatted = place.formattedAddress || place.formatted_address || ""
             const finalStreet = street || formatted
+
+            const latOk = Number.isFinite(lat) && lat >= -90 && lat <= 90
+            const lngOk = Number.isFinite(lng) && lng >= -180 && lng <= 180
+            // Tarneit is around lat -37.8, lng 144.7 — reject anything clearly outside
+            // the Australia bounding box so a weird Places response can't produce a
+            // bogus multi-thousand-km haversine result.
+            const inAustralia = latOk && lngOk && lat >= -44 && lat <= -10 && lng >= 112 && lng <= 154
+            // eslint-disable-next-line no-console
+            console.info("[Checkout] Place selected:", {
+              formatted,
+              street: finalStreet,
+              suburb,
+              postcode,
+              lat,
+              lng,
+              inAustralia
+            })
+            if (!latOk || !lngOk) {
+              onChangeRef.current?.(finalStreet)
+              onSelectRef.current?.({
+                street: finalStreet,
+                suburb,
+                postcode,
+                lat: undefined,
+                lng: undefined,
+                formatted
+              })
+              return
+            }
+            if (!inAustralia) {
+              // eslint-disable-next-line no-console
+              console.warn("[Checkout] Selected place appears to be outside Australia; ignoring coords.", { lat, lng })
+              onChangeRef.current?.(finalStreet)
+              onSelectRef.current?.({
+                street: finalStreet,
+                suburb,
+                postcode,
+                lat: undefined,
+                lng: undefined,
+                formatted
+              })
+              return
+            }
             onChangeRef.current?.(finalStreet)
             onSelectRef.current?.({ street: finalStreet, suburb, postcode, lat, lng, formatted })
           } catch (err) {
