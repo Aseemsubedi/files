@@ -250,6 +250,53 @@ button.card > div:last-child {
   font-weight: 600;
 }
 
+/* New Google PlaceAutocompleteElement (web component) styling */
+.place-autocomplete-host {
+  width: 100%;
+}
+.place-autocomplete-host.error gmp-place-autocomplete,
+.place-autocomplete-host.error .place-autocomplete-el {
+  border-color: #cf3c2c;
+}
+gmp-place-autocomplete,
+.place-autocomplete-el {
+  display: block;
+  width: 100%;
+  --gmpx-color-surface: #fff;
+  --gmpx-color-on-surface: var(--ink);
+  --gmpx-color-primary: var(--terra);
+  --gmpx-font-family-base: "DM Sans", sans-serif;
+  font-family: "DM Sans", sans-serif;
+}
+gmp-place-autocomplete::part(main-container),
+.place-autocomplete-el::part(main-container) {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 8px 12px;
+  min-height: 44px;
+}
+gmp-place-autocomplete::part(input),
+gmp-place-autocomplete::part(text-input),
+gmp-place-autocomplete::part(query-input) {
+  font-family: "DM Sans", sans-serif;
+  font-size: 14px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  outline: none;
+  width: 100%;
+}
+gmp-place-autocomplete::part(prediction-item) {
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--ink);
+}
+gmp-place-autocomplete::part(prediction-item-selected),
+gmp-place-autocomplete::part(prediction-item):hover {
+  background: rgba(196, 98, 45, 0.08);
+}
+
 /* Checkout: avoid fixed 320px column on phones — stack summary under forms */
 .checkout-page-grid {
   display: grid;

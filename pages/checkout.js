@@ -114,7 +114,7 @@ function CheckoutInner() {
         setGeoState({
           checked: true,
           ok: true,
-          text: `You're within range (${distance.toFixed(1)}km by air). Delivery: ${formatMoney(fee)}`
+          text: `You're within our delivery zone (${distance.toFixed(1)} km away). Delivery: ${formatMoney(fee)}`
         })
         return { ok: true, skipped: false, distance }
       }
@@ -417,68 +417,165 @@ function CheckoutInner() {
 }
 
 function AddressAutocompleteField({ label, value, onChange, onSelect, error, placeholder, autoComplete = "street-address" }) {
-  const inputRef = useRef(null)
-  const acRef = useRef(null)
+  const hostRef = useRef(null)
+  const fallbackInputRef = useRef(null)
+  const elRef = useRef(null)
   const onSelectRef = useRef(onSelect)
+  const onChangeRef = useRef(onChange)
+  const [useFallback, setUseFallback] = useState(!hasGoogleMapsKey())
   onSelectRef.current = onSelect
+  onChangeRef.current = onChange
 
   useEffect(() => {
     let cancelled = false
-    if (!inputRef.current || !hasGoogleMapsKey()) return undefined
+    if (!hasGoogleMapsKey()) {
+      setUseFallback(true)
+      return undefined
+    }
+    if (!hostRef.current) return undefined
 
     loadGoogleMaps()
-      .then((g) => {
-        if (cancelled || !g || acRef.current || !inputRef.current) return
-        const ac = new g.maps.places.Autocomplete(inputRef.current, {
-          componentRestrictions: { country: "au" },
-          fields: ["address_components", "geometry", "formatted_address"],
-          types: ["address"]
+      .then(async (g) => {
+        if (cancelled || !g || elRef.current || !hostRef.current) return
+        let PlaceAutocompleteElement
+        try {
+          const places =
+            g.maps.places ||
+            (typeof g.maps.importLibrary === "function" ? await g.maps.importLibrary("places") : null)
+          PlaceAutocompleteElement = places?.PlaceAutocompleteElement
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error("[Checkout] Failed to import Places library", err)
+          setUseFallback(true)
+          return
+        }
+        if (!PlaceAutocompleteElement) {
+          // eslint-disable-next-line no-console
+          console.error("[Checkout] PlaceAutocompleteElement not available — falling back to manual input.")
+          setUseFallback(true)
+          return
+        }
+
+        let el
+        const baseOpts = {
+          includedRegionCodes: ["au"],
+          includedPrimaryTypes: ["street_address", "premise", "subpremise", "route"]
+        }
+        try {
+          el = new PlaceAutocompleteElement(baseOpts)
+        } catch (err) {
+          try {
+            el = new PlaceAutocompleteElement({ includedRegionCodes: ["au"] })
+          } catch (e2) {
+            try {
+              el = new PlaceAutocompleteElement()
+            } catch (e3) {
+              // eslint-disable-next-line no-console
+              console.error("[Checkout] Unable to construct PlaceAutocompleteElement", e3)
+              setUseFallback(true)
+              return
+            }
+          }
+        }
+
+        el.setAttribute("placeholder", placeholder || "Start typing your address")
+        el.classList.add("place-autocomplete-el")
+
+        el.addEventListener("gmp-error", (e) => {
+          // eslint-disable-next-line no-console
+          console.error("[Checkout] gmp-error from PlaceAutocompleteElement:", e?.detail || e)
         })
-        ac.addListener("place_changed", () => {
-          const place = ac.getPlace()
-          if (!place?.geometry?.location) return
-          const comps = place.address_components || []
-          const get = (type) => comps.find((c) => c.types.includes(type))?.long_name || ""
-          const number = get("street_number")
-          const route = get("route")
-          const street = [number, route].filter(Boolean).join(" ").trim()
-          const suburb = get("locality") || get("sublocality") || get("postal_town")
-          const postcode = get("postal_code")
-          const lat = place.geometry.location.lat()
-          const lng = place.geometry.location.lng()
-          const formatted = place.formatted_address || ""
-          if (inputRef.current) inputRef.current.value = street || formatted
-          onSelectRef.current?.({
-            street: street || formatted,
-            suburb,
-            postcode,
-            lat,
-            lng,
-            formatted
-          })
+        el.addEventListener("gmp-requesterror", (e) => {
+          // eslint-disable-next-line no-console
+          console.error("[Checkout] gmp-requesterror:", e?.detail || e)
         })
-        acRef.current = ac
+
+        const handlePick = async (event) => {
+          try {
+            const prediction = event.placePrediction || event.detail?.placePrediction
+            let place
+            if (prediction?.toPlace) {
+              place = prediction.toPlace()
+              await place.fetchFields({
+                fields: ["displayName", "formattedAddress", "addressComponents", "location"]
+              })
+            } else if (event.place) {
+              place = event.place
+              if (place.fetchFields) {
+                await place.fetchFields({
+                  fields: ["displayName", "formattedAddress", "addressComponents", "location"]
+                })
+              }
+            }
+            if (!place) return
+            const comps = place.addressComponents || place.address_components || []
+            const get = (type) => {
+              const c = comps.find((x) => (x.types || []).includes(type))
+              return c ? c.longText || c.long_name || "" : ""
+            }
+            const number = get("street_number")
+            const route = get("route")
+            const street = [number, route].filter(Boolean).join(" ").trim()
+            const suburb = get("locality") || get("sublocality") || get("postal_town")
+            const postcode = get("postal_code")
+            const loc = place.location
+            const lat = typeof loc?.lat === "function" ? loc.lat() : loc?.lat
+            const lng = typeof loc?.lng === "function" ? loc.lng() : loc?.lng
+            const formatted = place.formattedAddress || place.formatted_address || ""
+            const finalStreet = street || formatted
+            onChangeRef.current?.(finalStreet)
+            onSelectRef.current?.({ street: finalStreet, suburb, postcode, lat, lng, formatted })
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error("[Checkout] Error handling place selection", err)
+          }
+        }
+
+        el.addEventListener("gmp-select", handlePick)
+        el.addEventListener("gmp-placeselect", handlePick)
+
+        hostRef.current.innerHTML = ""
+        hostRef.current.appendChild(el)
+        elRef.current = el
       })
-      .catch(() => {})
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error("[Checkout] Google Maps load failed:", err)
+        setUseFallback(true)
+      })
 
     return () => {
       cancelled = true
+      if (elRef.current) {
+        try {
+          elRef.current.remove()
+        } catch {}
+        elRef.current = null
+      }
     }
-  }, [])
+  }, [placeholder])
 
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ marginBottom: 5, fontSize: 12, color: "var(--muted)", textTransform: "uppercase" }}>{label}</div>
-      <input
-        ref={inputRef}
-        className={`input ${error ? "error" : ""}`}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        autoComplete={autoComplete}
-      />
+      {useFallback ? (
+        <input
+          ref={fallbackInputRef}
+          className={`input ${error ? "error" : ""}`}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+        />
+      ) : (
+        <div
+          ref={hostRef}
+          className={`place-autocomplete-host ${error ? "error" : ""}`}
+          aria-label={label}
+        />
+      )}
       {error ? <div className="err">{error}</div> : null}
-      {!hasGoogleMapsKey() ? (
+      {useFallback && !hasGoogleMapsKey() ? (
         <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
           Address autocomplete unavailable — type your address manually.
         </div>
