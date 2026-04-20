@@ -39,7 +39,7 @@ export default function CartPanel({ compactOnMobile = false }) {
             <div key={item.uid} style={{ borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
               <div style={{ fontWeight: 600 }}>{item.name}</div>
               <div style={{ fontSize: 12, color: "var(--muted)" }}>
-                {[item.size, item.spice, item.milk, item.sugar, item.ice, ...(item.syrups || []), ...(item.extras || [])].filter(Boolean).join(" · ")}
+                {[item.size, item.spice, item.water, item.milk, item.sugar, item.ice, ...(item.syrups || []), ...(item.extras || [])].filter(Boolean).join(" · ")}
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
                 <button className="btn btn-secondary" onClick={() => updateQty(item.uid, item.qty - 1)} type="button">

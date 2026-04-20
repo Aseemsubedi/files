@@ -1,5 +1,6 @@
 import Link from "next/link"
 import DrinkIcon from "../components/DrinkIcon"
+import HomeBackgroundIcons from "../components/HomeBackgroundIcons"
 import Nav from "../components/Nav"
 
 const tiles = [
@@ -14,6 +15,7 @@ export default function HomePage() {
       <div className="home-bg-orb home-bg-orb-a" />
       <div className="home-bg-orb home-bg-orb-b" />
       <div className="home-bg-orb home-bg-orb-c" />
+      <HomeBackgroundIcons />
       <Nav />
       <main className="container" style={{ padding: "42px 0 56px" }}>
         <p style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: ".08em", color: "var(--terra)" }}>Local delivery · within 5km</p>

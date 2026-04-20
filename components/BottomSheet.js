@@ -15,6 +15,7 @@ export default function BottomSheet({ item, catId, onClose, onAdd }) {
   const [syrups, setSyrups] = useState([])
   const [extras, setExtras] = useState([])
   const [spice, setSpice] = useState(item.spiceOptions?.[0] || null)
+  const [water, setWater] = useState(item.waterOptions?.[0] || null)
   const [qty, setQty] = useState(1)
 
   const unitPrice = useMemo(() => {
@@ -88,6 +89,16 @@ export default function BottomSheet({ item, catId, onClose, onAdd }) {
             {item.spiceOptions.map((level) => (
               <Chip key={level} onClick={() => setSpice(level)} active={spice === level}>
                 {level}
+              </Chip>
+            ))}
+          </Section>
+        ) : null}
+
+        {item.waterOptions?.length ? (
+          <Section title="Water Choice">
+            {item.waterOptions.map((opt) => (
+              <Chip key={opt} onClick={() => setWater(opt)} active={water === opt}>
+                {opt}
               </Chip>
             ))}
           </Section>
@@ -209,6 +220,7 @@ export default function BottomSheet({ item, catId, onClose, onAdd }) {
                 catId,
                 size: hasBothSizes(item) ? size : null,
                 spice: spice || null,
+                water: water || null,
                 milk: item.noCustomisation
                   ? null
                   : isMilkshakeCustom

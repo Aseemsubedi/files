@@ -79,44 +79,164 @@ button:focus-visible {
   position: relative;
   overflow: hidden;
   isolation: isolate;
+  background:
+    radial-gradient(1200px 600px at 85% -10%, rgba(255, 222, 184, 0.55), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, rgba(255, 235, 214, 0.6), transparent 60%),
+    radial-gradient(1000px 700px at 50% 110%, rgba(250, 226, 220, 0.55), transparent 60%),
+    linear-gradient(180deg, #fbf6ef 0%, #f7efe2 100%);
 }
 
-.home-animated-bg > *:not(.home-bg-orb) {
+.home-animated-bg > *:not(.home-bg-orb):not(.home-bg-icons) {
   position: relative;
+  z-index: 2;
+}
+
+.home-bg-icons {
+  position: absolute;
+  inset: 0;
   z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.home-bg-icon {
+  position: absolute;
+  display: inline-flex;
+  opacity: 0.6;
+  transform: rotate(var(--r, 0deg));
+  transform-origin: center;
+  will-change: transform;
+  filter: drop-shadow(0 4px 10px rgba(122, 58, 24, 0.1));
+}
+
+.home-bg-icon--float {
+  animation: home-float 9s ease-in-out infinite;
+}
+
+.home-bg-icon--drift {
+  animation: home-drift 12s ease-in-out infinite;
+}
+
+.home-bg-icon--bob {
+  animation: home-bob 8s ease-in-out infinite;
+}
+
+.home-bg-icon--spin {
+  animation: home-spin 22s linear infinite;
+}
+
+.home-bg-icon--wobble {
+  animation: home-wobble 7s ease-in-out infinite;
+}
+
+.home-bg-icon--steam {
+  animation: home-steam 4.5s ease-in-out infinite;
+  transform-origin: bottom center;
+  opacity: 0.45;
+}
+
+@keyframes home-float {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(var(--r, 0deg));
+  }
+  50% {
+    transform: translate3d(0, -18px, 0) rotate(calc(var(--r, 0deg) + 5deg));
+  }
+}
+
+@keyframes home-drift {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(var(--r, 0deg));
+  }
+  25% {
+    transform: translate3d(-14px, -10px, 0) rotate(calc(var(--r, 0deg) - 4deg));
+  }
+  50% {
+    transform: translate3d(0, -18px, 0) rotate(calc(var(--r, 0deg) + 3deg));
+  }
+  75% {
+    transform: translate3d(14px, -8px, 0) rotate(calc(var(--r, 0deg) + 6deg));
+  }
+}
+
+@keyframes home-bob {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(var(--r, 0deg)) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0) rotate(calc(var(--r, 0deg) - 6deg)) scale(1.04);
+  }
+}
+
+@keyframes home-spin {
+  from {
+    transform: rotate(var(--r, 0deg));
+  }
+  to {
+    transform: rotate(calc(var(--r, 0deg) + 360deg));
+  }
+}
+
+@keyframes home-wobble {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(var(--r, 0deg));
+  }
+  25% {
+    transform: translate3d(0, -6px, 0) rotate(calc(var(--r, 0deg) + 8deg));
+  }
+  75% {
+    transform: translate3d(0, -6px, 0) rotate(calc(var(--r, 0deg) - 8deg));
+  }
+}
+
+@keyframes home-steam {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translate3d(-4px, -10px, 0) scale(1.08);
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-bg-icon {
+    animation: none !important;
+  }
 }
 
 .home-bg-orb {
   position: absolute;
   border-radius: 999px;
-  filter: blur(2px);
+  filter: blur(24px);
   opacity: 0.55;
   pointer-events: none;
   z-index: 0;
 }
 
 .home-bg-orb-a {
-  width: min(42vw, 460px);
-  height: min(42vw, 460px);
-  background: radial-gradient(circle at 30% 30%, rgba(196, 98, 45, 0.22), rgba(196, 98, 45, 0) 70%);
+  width: min(52vw, 560px);
+  height: min(52vw, 560px);
+  background: radial-gradient(circle at 30% 30%, rgba(196, 98, 45, 0.38), rgba(196, 98, 45, 0) 70%);
   top: -120px;
   left: -80px;
   animation: float-orb-a 14s ease-in-out infinite;
 }
 
 .home-bg-orb-b {
-  width: min(34vw, 360px);
-  height: min(34vw, 360px);
-  background: radial-gradient(circle at 35% 35%, rgba(45, 106, 79, 0.2), rgba(45, 106, 79, 0) 72%);
+  width: min(42vw, 440px);
+  height: min(42vw, 440px);
+  background: radial-gradient(circle at 35% 35%, rgba(45, 106, 79, 0.32), rgba(45, 106, 79, 0) 72%);
   right: -70px;
   top: 120px;
   animation: float-orb-b 16s ease-in-out infinite;
 }
 
 .home-bg-orb-c {
-  width: min(30vw, 300px);
-  height: min(30vw, 300px);
-  background: radial-gradient(circle at 35% 35%, rgba(111, 62, 140, 0.16), rgba(111, 62, 140, 0) 72%);
+  width: min(38vw, 380px);
+  height: min(38vw, 380px);
+  background: radial-gradient(circle at 35% 35%, rgba(111, 62, 140, 0.26), rgba(111, 62, 140, 0) 72%);
   left: 48%;
   bottom: -120px;
   animation: float-orb-c 18s ease-in-out infinite;
@@ -461,7 +581,19 @@ gmp-place-autocomplete::part(prediction-item):hover {
   }
 
   .home-bg-orb {
-    opacity: 0.42;
+    opacity: 0.6;
+  }
+
+  .home-bg-icon {
+    opacity: 0.5;
+    zoom: 0.7;
+  }
+
+  /* On mobile the three cards span the full width, so any icon at
+     left/right margins ends up hidden behind a white card. Keep only the
+     top-hero decorations (coffee cup + top-left bean + small floating bean). */
+  .home-bg-icon:not(:nth-child(1)):not(:nth-child(6)):not(:nth-child(7)) {
+    display: none;
   }
 
   .site-footer {

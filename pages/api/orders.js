@@ -59,6 +59,7 @@ function computeLineFromCatalog(item) {
     catId: item.catId || null,
     size: item.size || null,
     spice: item.spice || null,
+    water: item.water || null,
     milk: item.milk || null,
     sugar: item.sugar || null,
     ice: item.ice || null,

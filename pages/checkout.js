@@ -3,7 +3,7 @@ import { loadStripe } from "@stripe/stripe-js"
 import { useEffect, useMemo, useRef, useState } from "react"
 import Nav from "../components/Nav"
 import { useCart } from "../lib/cartContext"
-import { checkDeliveryZone, getStoreBufferKm, getStoreCenter, haversineKm } from "../lib/geo"
+import { getStoreBufferKm, getStoreCenter, haversineKm } from "../lib/geo"
 import { hasGoogleMapsKey, loadGoogleMaps } from "../lib/googleMapsLoader"
 import { formatMoney } from "../lib/menu"
 import { SITE_PHONE_DISPLAY, SITE_PHONE_TEL } from "../lib/siteContact"
@@ -102,69 +102,38 @@ function CheckoutInner() {
     return Object.keys(next).length === 0
   }
 
-  const verifyGeo = async () => {
-    setGeoState({ checked: true, ok: true, text: "Checking location...", distance: null })
-
-    if (placeCoords) {
-      const store = getStoreCenter()
-      const distance = haversineKm(placeCoords.lat, placeCoords.lng, store.lat, store.lng)
-      const effectiveRadius = Number(deliverySettings.radiusFarKm || 5) + getStoreBufferKm()
-      if (distance <= effectiveRadius) {
-        const fee = resolveDeliveryFee(distance)
-        setDeliveryFee(fee)
-        setGeoState({
-          checked: true,
-          ok: true,
-          text: `You're within our delivery zone (${distance.toFixed(1)} km away). Delivery: ${formatMoney(fee)}`,
-          distance
-        })
-        return { ok: true, skipped: false, distance }
-      }
+  const verifyGeo = () => {
+    if (!placeCoords) {
       setGeoState({
-        checked: true,
+        checked: false,
         ok: false,
-        text: `Outside delivery zone (${distance.toFixed(1)}km). Please contact Riverdale before placing this order.`,
-        distance
-      })
-      return { ok: false, skipped: false, distance }
-    }
-
-    const result = await checkDeliveryZone(deliverySettings.radiusFarKm)
-    if (result.skipped) {
-      setDeliveryFee(resolveDeliveryFee(null))
-      setGeoState({
-        checked: true,
-        ok: true,
-        text: "Pick your address from the suggestions, or allow location access, to calculate delivery.",
+        text: "Please pick your address from the suggestions above so we can calculate your delivery fee.",
         distance: null
       })
-      return { ok: true, skipped: true, distance: null }
+      return { ok: false, skipped: true, distance: null }
     }
-    if (result.ok) {
-      const fee = resolveDeliveryFee(result.distance)
+
+    const store = getStoreCenter()
+    const distance = haversineKm(placeCoords.lat, placeCoords.lng, store.lat, store.lng)
+    const effectiveRadius = Number(deliverySettings.radiusFarKm || 5) + getStoreBufferKm()
+    if (distance <= effectiveRadius) {
+      const fee = resolveDeliveryFee(distance)
       setDeliveryFee(fee)
-      const accuracyText = result.accuracyMeters ? ` · accuracy ±${Math.round(result.accuracyMeters)}m` : ""
-      const boundaryText = result.effectiveRadiusKm && result.radiusKm && result.effectiveRadiusKm !== result.radiusKm
-        ? ` (includes ${Number(result.effectiveRadiusKm - result.radiusKm).toFixed(1)}km boundary buffer)`
-        : ""
       setGeoState({
         checked: true,
         ok: true,
-        text: `You're within range (${result.distance.toFixed(1)}km)${boundaryText}. Delivery: ${formatMoney(fee)}${accuracyText}`,
-        distance: result.distance
+        text: `You're within our delivery zone (${distance.toFixed(1)} km away). Delivery: ${formatMoney(fee)}`,
+        distance
       })
-      return { ok: true, skipped: false, distance: result.distance }
+      return { ok: true, skipped: false, distance }
     }
-    const accuracyHint = result.lowAccuracy
-      ? " Location signal is low accuracy; try again near a window or with GPS on."
-      : ""
     setGeoState({
       checked: true,
       ok: false,
-      text: `Outside delivery zone (${result.distance.toFixed(1)}km). Please contact Riverdale before placing this order.${accuracyHint}`,
-      distance: result.distance
+      text: `Outside delivery zone (${distance.toFixed(1)}km). Please contact Riverdale before placing this order.`,
+      distance
     })
-    return { ok: false, skipped: false, distance: result.distance }
+    return { ok: false, skipped: false, distance }
   }
 
   const saveOrder = async ({ status, stripePaymentId }) => {
@@ -200,8 +169,8 @@ function CheckoutInner() {
   const placeOrder = async () => {
     if (!items.length) return
     if (!validate()) return
-    if (!geoState.checked) {
-      alert("Please verify your location before placing the order.")
+    if (!geoState.checked || !geoState.ok) {
+      alert("Please pick your delivery address and confirm your delivery fee before placing the order.")
       return
     }
     setLoading(true)
@@ -354,17 +323,25 @@ function CheckoutInner() {
           <p style={{ marginTop: 4, marginBottom: 10, color: "var(--muted)", fontSize: 13, lineHeight: 1.45 }}>
             {placeCoords
               ? "Confirm your delivery fee for the selected address."
-              : "Pick your address from the suggestions, or allow location access, to calculate the delivery fee."}{" "}
+              : "Start typing your street address above and pick it from the suggestions to calculate your delivery fee."}{" "}
             Need help? Call{" "}
             <a href={SITE_PHONE_TEL} style={{ color: "var(--terra)", fontWeight: 600 }}>
               {SITE_PHONE_DISPLAY}
             </a>
             .
           </p>
-          <button type="button" className="btn btn-secondary" onClick={verifyGeo}>
-            {placeCoords ? "Confirm delivery fee" : "Use my current location instead"}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={verifyGeo}
+            disabled={!placeCoords}
+            style={!placeCoords ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
+          >
+            Confirm delivery fee
           </button>
-          {geoState.checked ? <p style={{ color: geoState.ok ? "var(--sage)" : "#cf3c2c" }}>{geoState.text}</p> : null}
+          {geoState.text ? (
+            <p style={{ color: geoState.ok ? "var(--sage)" : "#cf3c2c" }}>{geoState.text}</p>
+          ) : null}
         </section>
 
         <section className="card" style={{ padding: 18 }}>
@@ -389,16 +366,16 @@ function CheckoutInner() {
           </div>
         </section>
 
-        {!geoState.checked ? (
+        {!geoState.checked || !geoState.ok ? (
           <p style={{ marginTop: 12, color: "var(--muted)" }}>
-            Verify location to enable placing your order.
+            Pick your delivery address and confirm the delivery fee to enable placing your order.
           </p>
         ) : null}
 
         <button
           className="btn"
           onClick={placeOrder}
-          disabled={loading || !items.length || !geoState.checked}
+          disabled={loading || !items.length || !geoState.checked || !geoState.ok}
           style={{ marginTop: 16, width: "100%" }}
         >
           {loading ? "Processing..." : `Place order — ${formatMoney(total)}`}
@@ -414,7 +391,7 @@ function CheckoutInner() {
             <div key={item.uid} style={{ borderBottom: "1px solid var(--border)", padding: "8px 0" }}>
               <div style={{ fontWeight: 600 }}>{item.qty > 1 ? `${item.qty}x ` : ""}{item.name}</div>
               <div style={{ color: "var(--muted)", fontSize: 12 }}>
-                {[item.size, item.spice, item.milk, item.sugar, item.ice, ...(item.syrups || []), ...(item.extras || [])].filter(Boolean).join(" · ")}
+                {[item.size, item.spice, item.water, item.milk, item.sugar, item.ice, ...(item.syrups || []), ...(item.extras || [])].filter(Boolean).join(" · ")}
               </div>
               <div>{formatMoney(item.total)}</div>
             </div>

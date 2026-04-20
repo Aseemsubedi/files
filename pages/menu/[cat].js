@@ -138,6 +138,11 @@ export default function MenuPage({ initialCat = "" }) {
                                   Spice: {item.spiceOptions.join(" | ")}
                                 </small>
                               ) : null}
+                              {item.waterOptions?.length ? (
+                                <small style={{ color: "var(--muted)", marginLeft: 6 }}>
+                                  Water: {item.waterOptions.join(" | ")}
+                                </small>
+                              ) : null}
                             </div>
                           </button>
                         )
