@@ -57,9 +57,10 @@ function CheckoutInner() {
   })
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
-  const [geoState, setGeoState] = useState({ checked: false, ok: true, text: "" })
+  const [geoState, setGeoState] = useState({ checked: false, ok: true, text: "", distance: null })
   const [confirmation, setConfirmation] = useState(false)
   const [placeCoords, setPlaceCoords] = useState(null)
+  const [placeFormatted, setPlaceFormatted] = useState("")
 
   const orderRef = useMemo(() => generateRef(), [])
 
@@ -102,7 +103,7 @@ function CheckoutInner() {
   }
 
   const verifyGeo = async () => {
-    setGeoState({ checked: true, ok: true, text: "Checking location..." })
+    setGeoState({ checked: true, ok: true, text: "Checking location...", distance: null })
 
     if (placeCoords) {
       const store = getStoreCenter()
@@ -114,14 +115,16 @@ function CheckoutInner() {
         setGeoState({
           checked: true,
           ok: true,
-          text: `You're within our delivery zone (${distance.toFixed(1)} km away). Delivery: ${formatMoney(fee)}`
+          text: `You're within our delivery zone (${distance.toFixed(1)} km away). Delivery: ${formatMoney(fee)}`,
+          distance
         })
         return { ok: true, skipped: false, distance }
       }
       setGeoState({
         checked: true,
         ok: false,
-        text: `Outside delivery zone (${distance.toFixed(1)}km). Please contact Riverdale before placing this order.`
+        text: `Outside delivery zone (${distance.toFixed(1)}km). Please contact Riverdale before placing this order.`,
+        distance
       })
       return { ok: false, skipped: false, distance }
     }
@@ -132,7 +135,8 @@ function CheckoutInner() {
       setGeoState({
         checked: true,
         ok: true,
-        text: "Pick your address from the suggestions, or allow location access, to calculate delivery."
+        text: "Pick your address from the suggestions, or allow location access, to calculate delivery.",
+        distance: null
       })
       return { ok: true, skipped: true, distance: null }
     }
@@ -146,7 +150,8 @@ function CheckoutInner() {
       setGeoState({
         checked: true,
         ok: true,
-        text: `You're within range (${result.distance.toFixed(1)}km)${boundaryText}. Delivery: ${formatMoney(fee)}${accuracyText}`
+        text: `You're within range (${result.distance.toFixed(1)}km)${boundaryText}. Delivery: ${formatMoney(fee)}${accuracyText}`,
+        distance: result.distance
       })
       return { ok: true, skipped: false, distance: result.distance }
     }
@@ -156,18 +161,27 @@ function CheckoutInner() {
     setGeoState({
       checked: true,
       ok: false,
-      text: `Outside delivery zone (${result.distance.toFixed(1)}km). Please contact Riverdale before placing this order.${accuracyHint}`
+      text: `Outside delivery zone (${result.distance.toFixed(1)}km). Please contact Riverdale before placing this order.${accuracyHint}`,
+      distance: result.distance
     })
     return { ok: false, skipped: false, distance: result.distance }
   }
 
   const saveOrder = async ({ status, stripePaymentId }) => {
+    const customer = {
+      ...form,
+      formattedAddress: placeFormatted || "",
+      deliveryLat: placeCoords?.lat ?? null,
+      deliveryLng: placeCoords?.lng ?? null,
+      deliveryDistanceKm:
+        geoState.distance != null ? Number(Number(geoState.distance).toFixed(2)) : null
+    }
     const res = await fetch("/api/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ref: orderRef,
-        customer: form,
+        customer,
         items,
         subtotal,
         deliveryFee,
@@ -271,11 +285,12 @@ function CheckoutInner() {
             onChange={(v) => {
               update("address", v)
               if (placeCoords) setPlaceCoords(null)
+              if (placeFormatted) setPlaceFormatted("")
             }}
             error={errors.address}
             placeholder="Start typing your address"
             autoComplete="street-address"
-            onSelect={({ street, suburb, postcode, lat, lng }) => {
+            onSelect={({ street, suburb, postcode, lat, lng, formatted }) => {
               setForm((prev) => ({
                 ...prev,
                 address: street || prev.address,
@@ -283,6 +298,7 @@ function CheckoutInner() {
                 postcode: postcode || prev.postcode
               }))
               setPlaceCoords({ lat, lng })
+              setPlaceFormatted(formatted || "")
             }}
           />
           <TwoCol>

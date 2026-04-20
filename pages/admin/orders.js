@@ -168,10 +168,81 @@ export default function AdminOrdersPage() {
                   <div style={{ fontWeight: 700 }}>
                     {order.customer?.firstName} {order.customer?.lastName}
                   </div>
-                  <div style={{ color: "var(--muted)", fontSize: 13 }}>{order.customer?.phone || "-"}</div>
                   <div style={{ color: "var(--muted)", fontSize: 13 }}>
-                    {order.customer?.address}, {order.customer?.suburb} {order.customer?.postcode}
+                    {order.customer?.phone ? (
+                      <a href={`tel:${order.customer.phone}`} style={{ color: "inherit" }}>
+                        {order.customer.phone}
+                      </a>
+                    ) : (
+                      "-"
+                    )}
                   </div>
+                  {(() => {
+                    const c = order.customer || {}
+                    const street = c.address || ""
+                    const suburbLine = [c.suburb, c.postcode].filter(Boolean).join(" ")
+                    const primary = c.formattedAddress
+                      ? c.formattedAddress
+                      : [street, suburbLine].filter(Boolean).join(", ")
+                    const hasCoords = Number.isFinite(c.deliveryLat) && Number.isFinite(c.deliveryLng)
+                    const mapsHref = hasCoords
+                      ? `https://www.google.com/maps/dir/?api=1&destination=${c.deliveryLat},${c.deliveryLng}`
+                      : primary
+                        ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(primary)}`
+                        : ""
+                    return (
+                      <div style={{ marginTop: 4 }}>
+                        <div style={{ color: "var(--ink)", fontSize: 13, fontWeight: 600 }}>{primary || "-"}</div>
+                        {c.formattedAddress && street && c.formattedAddress !== street ? (
+                          <div style={{ color: "var(--muted)", fontSize: 12 }}>
+                            Typed: {street}
+                            {suburbLine ? `, ${suburbLine}` : ""}
+                          </div>
+                        ) : null}
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 8,
+                            marginTop: 6,
+                            alignItems: "center"
+                          }}
+                        >
+                          {Number.isFinite(c.deliveryDistanceKm) ? (
+                            <span
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 700,
+                                color: "#1f4d39",
+                                background: "rgba(45,106,79,.12)",
+                                border: "1px solid rgba(45,106,79,.25)",
+                                borderRadius: 999,
+                                padding: "2px 8px"
+                              }}
+                            >
+                              {Number(c.deliveryDistanceKm).toFixed(1)} km from cafe
+                            </span>
+                          ) : null}
+                          {hasCoords ? (
+                            <span style={{ fontSize: 11, color: "var(--muted)", fontFamily: "monospace" }}>
+                              {Number(c.deliveryLat).toFixed(5)}, {Number(c.deliveryLng).toFixed(5)}
+                            </span>
+                          ) : null}
+                          {mapsHref ? (
+                            <a
+                              href={mapsHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-secondary"
+                              style={{ padding: "4px 10px", fontSize: 12 }}
+                            >
+                              Open in Google Maps
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+                    )
+                  })()}
                   {order.customer?.notes ? (
                     <div
                       style={{
