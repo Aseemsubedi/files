@@ -380,7 +380,45 @@ function CheckoutInner() {
             Confirm delivery fee
           </button>
           {geoState.text ? (
-            <p style={{ color: geoState.ok ? "var(--sage)" : "#cf3c2c" }}>{geoState.text}</p>
+            <div
+              role={geoState.ok ? "status" : "alert"}
+              style={{
+                marginTop: 10,
+                padding: "10px 12px",
+                borderRadius: 12,
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                background: geoState.ok ? "rgba(45,106,79,.10)" : "rgba(207,60,44,.08)",
+                border: geoState.ok
+                  ? "1px solid rgba(45,106,79,.28)"
+                  : "1px solid rgba(207,60,44,.25)",
+                color: geoState.ok ? "#1f4d39" : "#7a1d14"
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 999,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  background: geoState.ok ? "#2d6a4f" : "#cf3c2c",
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: 800,
+                  lineHeight: 1
+                }}
+              >
+                {geoState.ok ? "\u2713" : "!"}
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4 }}>
+                {geoState.text}
+              </span>
+            </div>
           ) : null}
         </section>
 
