@@ -114,16 +114,16 @@ function CheckoutInner() {
     }
 
     const store = getStoreCenter()
-    if (!Number.isFinite(store.lat) || !Number.isFinite(store.lng)) {
-      setGeoState({
-        checked: true,
-        ok: false,
-        text: "We couldn't locate our store on the map. Please call Riverdale to place your order.",
-        distance: null
-      })
-      return { ok: false, skipped: false, distance: null }
-    }
     const distance = haversineKm(placeCoords.lat, placeCoords.lng, store.lat, store.lng)
+    // One-line diagnostic so we can verify coords in production via devtools.
+    // eslint-disable-next-line no-console
+    console.info("[Checkout] verifyGeo", {
+      store,
+      placeCoords,
+      distanceKm: distance,
+      envStoreLat: process.env.NEXT_PUBLIC_STORE_LAT,
+      envStoreLng: process.env.NEXT_PUBLIC_STORE_LNG
+    })
     if (!Number.isFinite(distance)) {
       setGeoState({
         checked: true,
