@@ -18,6 +18,37 @@ const stripePromise = hasStripePublishableKey
   : null
 const DEFAULT_DELIVERY_SETTINGS = { radiusNearKm: 3, feeNear: 8, radiusFarKm: 5, feeFar: 12 }
 
+const STRIPE_FIELD_STYLE = {
+  base: {
+    fontFamily: '"DM Sans", sans-serif',
+    fontSize: "16px",
+    lineHeight: "24px",
+    color: "#1a1710",
+    "::placeholder": { color: "#a39a8c" }
+  },
+  invalid: {
+    color: "#cf3c2c",
+    iconColor: "#cf3c2c"
+  }
+}
+
+const STRIPE_FIELD_CLASSES = {
+  base: "checkout-stripe-el",
+  focus: "checkout-stripe-el--focus",
+  invalid: "checkout-stripe-el--invalid"
+}
+
+const stripeCardOptions = {
+  style: STRIPE_FIELD_STYLE,
+  classes: STRIPE_FIELD_CLASSES
+}
+
+const stripeCardNumberOptions = {
+  ...stripeCardOptions,
+  showIcon: true,
+  iconStyle: "solid"
+}
+
 function isValidAustralianPhone(value) {
   const normalized = String(value || "").replace(/[^\d+]/g, "")
   if (/^\+614\d{8}$/.test(normalized)) return true
@@ -655,19 +686,19 @@ function CheckoutInner() {
           ) : null}
         </section>
 
-        <section className="card" style={{ padding: 18 }}>
+        <section className="card checkout-payment-section" style={{ padding: 18 }}>
           <h3>3. Payment</h3>
-          <div style={{ display: "grid", gap: 10 }}>
+          <div className="checkout-payment-stack">
             {!hasStripePublishableKey ? (
-              <div className="card" style={{ padding: 14, background: "#fff8f0" }}>
-                <p style={{ margin: 0, color: "var(--muted)" }}>
+              <div className="checkout-payment-unavailable">
+                <p>
                   Card and wallet payments are unavailable until a valid `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is configured.
                 </p>
               </div>
             ) : (
               <>
                 {canPayNatively && paymentRequest ? (
-                  <>
+                  <div className="checkout-wallet-block">
                     <PaymentRequestButtonElement
                       options={{
                         paymentRequest,
@@ -676,21 +707,61 @@ function CheckoutInner() {
                         }
                       }}
                     />
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-                      <span style={{ color: "var(--muted)", fontSize: 12, whiteSpace: "nowrap" }}>or pay by card</span>
-                      <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+                    <div className="checkout-pay-divider" aria-hidden="true">
+                      <span>or pay by card</span>
                     </div>
-                  </>
+                  </div>
                 ) : null}
-                <div className="input"><CardNumberElement /></div>
-                <TwoCol>
-                  <div className="input"><CardExpiryElement /></div>
-                  <div className="input"><CardCvcElement /></div>
-                </TwoCol>
+                <div className="checkout-card-panel">
+                  <div className="checkout-card-panel-head">
+                    <span className="checkout-card-panel-title">Card details</span>
+                    <span className="checkout-card-brands" aria-hidden="true">
+                      Visa · Mastercard · Amex
+                    </span>
+                  </div>
+                  <div className="checkout-stripe-field">
+                    <label className="checkout-field-label" htmlFor="card-number">
+                      Card number
+                    </label>
+                    <div className="checkout-stripe-input">
+                      <CardNumberElement id="card-number" options={stripeCardNumberOptions} />
+                    </div>
+                  </div>
+                  <TwoCol>
+                    <div className="checkout-stripe-field">
+                      <label className="checkout-field-label" htmlFor="card-expiry">
+                        Expiry
+                      </label>
+                      <div className="checkout-stripe-input">
+                        <CardExpiryElement id="card-expiry" options={stripeCardOptions} />
+                      </div>
+                    </div>
+                    <div className="checkout-stripe-field">
+                      <label className="checkout-field-label" htmlFor="card-cvc">
+                        Security code
+                      </label>
+                      <div className="checkout-stripe-input">
+                        <CardCvcElement id="card-cvc" options={stripeCardOptions} />
+                      </div>
+                    </div>
+                  </TwoCol>
+                </div>
               </>
             )}
-            <small style={{ color: "var(--muted)" }}>Payments processed by Stripe.</small>
+            <div className="checkout-trust-row">
+              <span className="checkout-trust-lock" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+              <span>Secure checkout · Payments processed by Stripe</span>
+            </div>
           </div>
         </section>
 
