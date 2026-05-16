@@ -25,15 +25,30 @@ export default async function handler(req, res) {
       apiVersion: "2024-06-20"
     })
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount,
-      currency: "aud",
-      metadata: {
-        customerName: customerName || "",
-        customerEmail: customerEmail || "",
-        orderRef: orderRef || ""
-      }
-    })
+    let paymentIntent
+    try {
+      paymentIntent = await stripe.paymentIntents.create({
+        amount,
+        currency: "aud",
+        automatic_payment_methods: { enabled: true },
+        metadata: {
+          customerName: customerName || "",
+          customerEmail: customerEmail || "",
+          orderRef: orderRef || ""
+        }
+      })
+    } catch {
+      paymentIntent = await stripe.paymentIntents.create({
+        amount,
+        currency: "aud",
+        payment_method_types: ["card"],
+        metadata: {
+          customerName: customerName || "",
+          customerEmail: customerEmail || "",
+          orderRef: orderRef || ""
+        }
+      })
+    }
 
     res.status(200).json({ clientSecret: paymentIntent.client_secret })
   } catch (error) {

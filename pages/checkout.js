@@ -1,4 +1,4 @@
-import { CardCvcElement, CardExpiryElement, CardNumberElement, Elements, useElements, useStripe } from "@stripe/react-stripe-js"
+import { CardCvcElement, CardExpiryElement, CardNumberElement, Elements, PaymentRequestButtonElement, useElements, useStripe } from "@stripe/react-stripe-js"
 import { loadStripe } from "@stripe/stripe-js"
 import { useEffect, useMemo, useRef, useState } from "react"
 import Nav from "../components/Nav"
@@ -62,8 +62,28 @@ function CheckoutInner() {
   const [placeCoords, setPlaceCoords] = useState(null)
   const [placeFormatted, setPlaceFormatted] = useState("")
   const [verifying, setVerifying] = useState(false)
+  const [paymentRequest, setPaymentRequest] = useState(null)
+  const [canPayNatively, setCanPayNatively] = useState(false)
 
   const orderRef = useMemo(() => generateRef(), [])
+
+  // Refs so wallet payment handler always sees latest cart + form state
+  const formRef = useRef(form)
+  const geoStateRef = useRef(geoState)
+  const itemsRef = useRef(items)
+  const subtotalRef = useRef(subtotal)
+  const deliveryFeeRef = useRef(deliveryFee)
+  const totalRef = useRef(total)
+  const placeCoordsRef = useRef(placeCoords)
+  const placeFormattedRef = useRef(placeFormatted)
+  formRef.current = form
+  geoStateRef.current = geoState
+  itemsRef.current = items
+  subtotalRef.current = subtotal
+  deliveryFeeRef.current = deliveryFee
+  totalRef.current = total
+  placeCoordsRef.current = placeCoords
+  placeFormattedRef.current = placeFormatted
 
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }))
 
@@ -101,6 +121,17 @@ function CheckoutInner() {
     if (form.suburb.trim().length < 2) next.suburb = "Required"
     setErrors(next)
     return Object.keys(next).length === 0
+  }
+
+  const getValidationErrors = (data) => {
+    const next = {}
+    if (!data.firstName.trim()) next.firstName = "Required"
+    if (!data.lastName.trim()) next.lastName = "Required"
+    if (!isValidAustralianPhone(data.phone.trim())) next.phone = "Enter a valid Australian phone"
+    if (!isValidEmail(data.email)) next.email = "Enter a valid email address"
+    if (data.address.trim().length < 4) next.address = "Required"
+    if (data.suburb.trim().length < 2) next.suburb = "Required"
+    return next
   }
 
   // When NEXT_PUBLIC_DISTANCE_MODE === "driving", we ask /api/route-distance
@@ -225,7 +256,7 @@ function CheckoutInner() {
     return { ok: false, skipped: false, distance }
   }
 
-  const saveOrder = async ({ status, stripePaymentId }) => {
+  const saveOrder = async ({ status, stripePaymentId, paymentMethod = "card" }) => {
     const customer = {
       ...form,
       formattedAddress: placeFormatted || "",
@@ -244,7 +275,7 @@ function CheckoutInner() {
         subtotal,
         deliveryFee,
         total,
-        paymentMethod: "card",
+        paymentMethod,
         stripePaymentId,
         status
       })
@@ -254,6 +285,159 @@ function CheckoutInner() {
       throw new Error(json.error || "Could not save order.")
     }
   }
+
+  const saveOrderFromRefs = async ({ status, stripePaymentId, paymentMethod = "wallet" }) => {
+    const currentForm = formRef.current
+    const currentGeo = geoStateRef.current
+    const customer = {
+      ...currentForm,
+      formattedAddress: placeFormattedRef.current || "",
+      deliveryLat: placeCoordsRef.current?.lat ?? null,
+      deliveryLng: placeCoordsRef.current?.lng ?? null,
+      deliveryDistanceKm:
+        currentGeo.distance != null ? Number(Number(currentGeo.distance).toFixed(2)) : null
+    }
+    const res = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ref: orderRef,
+        customer,
+        items: itemsRef.current,
+        subtotal: subtotalRef.current,
+        deliveryFee: deliveryFeeRef.current,
+        total: totalRef.current,
+        paymentMethod,
+        stripePaymentId,
+        status
+      })
+    })
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}))
+      throw new Error(json.error || "Could not save order.")
+    }
+  }
+
+  const paymentAmountCents = () => Math.round(total * 100)
+
+  // Apple Pay / Google Pay (optional — card checkout unchanged below)
+  useEffect(() => {
+    if (!stripe || !hasStripePublishableKey) return undefined
+    let active = true
+    const cents = Math.max(paymentAmountCents(), 50)
+    const pr = stripe.paymentRequest({
+      country: "AU",
+      currency: "aud",
+      total: { label: "Cafe Riverdale order", amount: cents },
+      requestPayerName: false,
+      requestPayerEmail: false,
+      requestPayerPhone: false
+    })
+    pr.canMakePayment().then((result) => {
+      if (!active) return
+      if (result?.applePay || result?.googlePay) {
+        setPaymentRequest(pr)
+        setCanPayNatively(true)
+      } else {
+        setPaymentRequest(null)
+        setCanPayNatively(false)
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [stripe])
+
+  useEffect(() => {
+    if (!paymentRequest) return
+    paymentRequest.update({
+      total: { label: "Cafe Riverdale order", amount: Math.max(Math.round(total * 100), 50) }
+    })
+  }, [paymentRequest, total])
+
+  useEffect(() => {
+    if (!paymentRequest || !stripe) return undefined
+
+    const handlePaymentMethod = async (ev) => {
+      const currentGeo = geoStateRef.current
+      const currentItems = itemsRef.current
+
+      if (!currentItems.length) {
+        ev.complete("fail")
+        alert("Add at least one item to your cart before paying.")
+        return
+      }
+      if (!currentGeo.checked || !currentGeo.ok) {
+        ev.complete("fail")
+        alert("Please pick your delivery address and confirm your delivery fee before placing the order.")
+        return
+      }
+      const fieldErrors = getValidationErrors(formRef.current)
+      if (Object.keys(fieldErrors).length > 0) {
+        ev.complete("fail")
+        setErrors(fieldErrors)
+        alert("Please fill in all required fields above before paying.")
+        return
+      }
+
+      const walletType = ev.paymentMethod?.card?.wallet?.type
+      const paymentMethod =
+        walletType === "apple_pay" ? "apple_pay" : walletType === "google_pay" ? "google_pay" : "wallet"
+
+      setLoading(true)
+      try {
+        const amount = Math.max(Math.round(totalRef.current * 100), 50)
+        const currentForm = formRef.current
+        const paymentRes = await fetch("/api/create-payment-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount,
+            customerName: `${currentForm.firstName} ${currentForm.lastName}`,
+            customerEmail: currentForm.email,
+            orderRef
+          })
+        })
+        const paymentJson = await paymentRes.json().catch(() => ({}))
+        if (!paymentRes.ok || !paymentJson.clientSecret) {
+          ev.complete("fail")
+          throw new Error(paymentJson.error || "Could not initialize payment.")
+        }
+
+        const { error, paymentIntent } = await stripe.confirmCardPayment(
+          paymentJson.clientSecret,
+          { payment_method: ev.paymentMethod.id },
+          { handleActions: false }
+        )
+        if (error) {
+          ev.complete("fail")
+          throw new Error(error.message)
+        }
+
+        ev.complete("success")
+
+        if (paymentIntent.status === "requires_action") {
+          const { error: actionError, paymentIntent: finalIntent } = await stripe.confirmCardPayment(
+            paymentJson.clientSecret
+          )
+          if (actionError) throw new Error(actionError.message)
+          await saveOrderFromRefs({ status: "paid", stripePaymentId: finalIntent.id, paymentMethod })
+        } else {
+          await saveOrderFromRefs({ status: "paid", stripePaymentId: paymentIntent.id, paymentMethod })
+        }
+
+        setConfirmation(true)
+        clearCart()
+      } catch (err) {
+        alert(err.message || "Order failed")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    paymentRequest.on("paymentmethod", handlePaymentMethod)
+    return () => paymentRequest.off("paymentmethod", handlePaymentMethod)
+  }, [paymentRequest, stripe, orderRef])
 
   const placeOrder = async () => {
     if (!items.length) return
@@ -266,7 +450,7 @@ function CheckoutInner() {
     try {
       if (!hasStripePublishableKey) throw new Error("Card payments are unavailable. Add a valid Stripe publishable key.")
       if (!stripe || !elements) throw new Error("Stripe is not ready.")
-      const amount = Math.round(total * 100)
+      const amount = paymentAmountCents()
       const paymentRes = await fetch("/api/create-payment-intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -308,10 +492,12 @@ function CheckoutInner() {
 
   if (confirmation) {
     return (
-      <main className="container" style={{ padding: "40px 0 60px", maxWidth: 680 }}>
+      <main className="container checkout-confirmation" style={{ padding: "40px 0 60px", maxWidth: 680 }}>
         <div className="card" style={{ padding: 24 }}>
-          <h1>Order placed!</h1>
-          <p style={{ color: "var(--muted)" }}>Reference: <strong>{orderRef}</strong></p>
+          <h1 style={{ marginBottom: 8 }}>Order placed!</h1>
+          <p style={{ color: "var(--muted)", marginTop: 0 }}>
+            Reference: <strong>{orderRef}</strong>
+          </p>
           <p style={{ color: "var(--muted)" }}>
             {form.firstName} {form.lastName} · {form.address}, {form.suburb} {form.postcode}
           </p>
@@ -342,7 +528,11 @@ function CheckoutInner() {
             value={form.address}
             onChange={(v) => {
               update("address", v)
-              if (placeCoords) setPlaceCoords(null)
+              if (placeCoords) {
+                setPlaceCoords(null)
+                setGeoState({ checked: false, ok: true, text: "", distance: null })
+                setDeliveryFee(deliverySettings.feeNear)
+              }
               if (placeFormatted) setPlaceFormatted("")
             }}
             error={errors.address}
@@ -362,6 +552,7 @@ function CheckoutInner() {
               }
               setPlaceFormatted(formatted || "")
               setGeoState({ checked: false, ok: true, text: "", distance: null })
+              setDeliveryFee(deliverySettings.feeNear)
             }}
           />
           <TwoCol>
@@ -426,7 +617,7 @@ function CheckoutInner() {
           </p>
           <button
             type="button"
-            className="btn btn-secondary"
+            className="btn btn-secondary checkout-confirm-fee"
             onClick={verifyGeo}
             disabled={!placeCoords || verifying}
             style={!placeCoords || verifying ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
@@ -444,34 +635,22 @@ function CheckoutInner() {
                 alignItems: "flex-start",
                 gap: 10,
                 background: geoState.ok ? "rgba(45,106,79,.10)" : "rgba(207,60,44,.08)",
-                border: geoState.ok
-                  ? "1px solid rgba(45,106,79,.28)"
-                  : "1px solid rgba(207,60,44,.25)",
+                border: geoState.ok ? "1px solid rgba(45,106,79,.28)" : "1px solid rgba(207,60,44,.25)",
                 color: geoState.ok ? "#1f4d39" : "#7a1d14"
               }}
             >
               <span
                 aria-hidden="true"
                 style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 999,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
+                  width: 22, height: 22, borderRadius: 999, display: "inline-flex",
+                  alignItems: "center", justifyContent: "center", flexShrink: 0,
                   background: geoState.ok ? "#2d6a4f" : "#cf3c2c",
-                  color: "#fff",
-                  fontSize: 14,
-                  fontWeight: 800,
-                  lineHeight: 1
+                  color: "#fff", fontSize: 14, fontWeight: 800, lineHeight: 1
                 }}
               >
                 {geoState.ok ? "\u2713" : "!"}
               </span>
-              <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4 }}>
-                {geoState.text}
-              </span>
+              <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4 }}>{geoState.text}</span>
             </div>
           ) : null}
         </section>
@@ -482,11 +661,28 @@ function CheckoutInner() {
             {!hasStripePublishableKey ? (
               <div className="card" style={{ padding: 14, background: "#fff8f0" }}>
                 <p style={{ margin: 0, color: "var(--muted)" }}>
-                  Card payments are unavailable until a valid `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is configured.
+                  Card and wallet payments are unavailable until a valid `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is configured.
                 </p>
               </div>
             ) : (
               <>
+                {canPayNatively && paymentRequest ? (
+                  <>
+                    <PaymentRequestButtonElement
+                      options={{
+                        paymentRequest,
+                        style: {
+                          paymentRequestButton: { type: "buy", theme: "dark", height: "48px" }
+                        }
+                      }}
+                    />
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+                      <span style={{ color: "var(--muted)", fontSize: 12, whiteSpace: "nowrap" }}>or pay by card</span>
+                      <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+                    </div>
+                  </>
+                ) : null}
                 <div className="input"><CardNumberElement /></div>
                 <TwoCol>
                   <div className="input"><CardExpiryElement /></div>
@@ -505,7 +701,7 @@ function CheckoutInner() {
         ) : null}
 
         <button
-          className="btn"
+          className="btn checkout-place-order"
           onClick={placeOrder}
           disabled={loading || !items.length || !geoState.checked || !geoState.ok}
           style={{ marginTop: 16, width: "100%" }}
@@ -563,14 +759,11 @@ function AddressAutocompleteField({ label, value, onChange, onSelect, error, pla
       .then(async (g) => {
         if (cancelled) return
         if (!g) {
-          // eslint-disable-next-line no-console
           console.warn("[Checkout] Google Maps unavailable — using manual address input.")
           setUseFallback(true)
           return
         }
         if (!hostRef.current) return
-        // If Fast Refresh left behind an element that is no longer in the DOM,
-        // clear the ref so we append a fresh one instead of silently bailing.
         if (elRef.current && !hostRef.current.contains(elRef.current)) {
           elRef.current = null
         }
@@ -582,13 +775,11 @@ function AddressAutocompleteField({ label, value, onChange, onSelect, error, pla
             (typeof g.maps.importLibrary === "function" ? await g.maps.importLibrary("places") : null)
           PlaceAutocompleteElement = places?.PlaceAutocompleteElement
         } catch (err) {
-          // eslint-disable-next-line no-console
           console.error("[Checkout] Failed to import Places library", err)
           setUseFallback(true)
           return
         }
         if (!PlaceAutocompleteElement) {
-          // eslint-disable-next-line no-console
           console.error("[Checkout] PlaceAutocompleteElement not available — falling back to manual input.")
           setUseFallback(true)
           return
@@ -608,7 +799,6 @@ function AddressAutocompleteField({ label, value, onChange, onSelect, error, pla
             try {
               el = new PlaceAutocompleteElement()
             } catch (e3) {
-              // eslint-disable-next-line no-console
               console.error("[Checkout] Unable to construct PlaceAutocompleteElement", e3)
               setUseFallback(true)
               return
@@ -620,11 +810,9 @@ function AddressAutocompleteField({ label, value, onChange, onSelect, error, pla
         el.classList.add("place-autocomplete-el")
 
         el.addEventListener("gmp-error", (e) => {
-          // eslint-disable-next-line no-console
           console.error("[Checkout] gmp-error from PlaceAutocompleteElement:", e?.detail || e)
         })
         el.addEventListener("gmp-requesterror", (e) => {
-          // eslint-disable-next-line no-console
           console.error("[Checkout] gmp-requesterror:", e?.detail || e)
         })
 
@@ -634,15 +822,11 @@ function AddressAutocompleteField({ label, value, onChange, onSelect, error, pla
             let place
             if (prediction?.toPlace) {
               place = prediction.toPlace()
-              await place.fetchFields({
-                fields: ["displayName", "formattedAddress", "addressComponents", "location"]
-              })
+              await place.fetchFields({ fields: ["displayName", "formattedAddress", "addressComponents", "location"] })
             } else if (event.place) {
               place = event.place
               if (place.fetchFields) {
-                await place.fetchFields({
-                  fields: ["displayName", "formattedAddress", "addressComponents", "location"]
-                })
+                await place.fetchFields({ fields: ["displayName", "formattedAddress", "addressComponents", "location"] })
               }
             }
             if (!place) return
@@ -657,10 +841,6 @@ function AddressAutocompleteField({ label, value, onChange, onSelect, error, pla
             const suburb = get("locality") || get("sublocality") || get("postal_town")
             const postcode = get("postal_code")
 
-            // Robust lat/lng extraction. Google's Place API exposes `location` in
-            // multiple shapes across versions: a LatLng with lat()/lng() methods,
-            // a plain {lat, lng}, or {latitude, longitude}. Also check geometry.location
-            // and toJSON() as final fallbacks.
             const extractLatLng = (p) => {
               const candidates = []
               if (p?.location) candidates.push(p.location)
@@ -681,9 +861,7 @@ function AddressAutocompleteField({ label, value, onChange, onSelect, error, pla
                 if (typeof loc.lng === "function") lng = loc.lng()
                 else if (typeof loc.lng === "number") lng = loc.lng
                 else if (typeof loc.longitude === "number") lng = loc.longitude
-                if (Number.isFinite(lat) && Number.isFinite(lng)) {
-                  return { lat, lng }
-                }
+                if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng }
               }
               return { lat: undefined, lng: undefined }
             }
@@ -693,50 +871,22 @@ function AddressAutocompleteField({ label, value, onChange, onSelect, error, pla
 
             const latOk = Number.isFinite(lat) && lat >= -90 && lat <= 90
             const lngOk = Number.isFinite(lng) && lng >= -180 && lng <= 180
-            // Tarneit is around lat -37.8, lng 144.7 — reject anything clearly outside
-            // the Australia bounding box so a weird Places response can't produce a
-            // bogus multi-thousand-km haversine result.
             const inAustralia = latOk && lngOk && lat >= -44 && lat <= -10 && lng >= 112 && lng <= 154
-            // eslint-disable-next-line no-console
-            console.info("[Checkout] Place selected:", {
-              formatted,
-              street: finalStreet,
-              suburb,
-              postcode,
-              lat,
-              lng,
-              inAustralia
-            })
+            console.info("[Checkout] Place selected:", { formatted, street: finalStreet, suburb, postcode, lat, lng, inAustralia })
             if (!latOk || !lngOk) {
               onChangeRef.current?.(finalStreet)
-              onSelectRef.current?.({
-                street: finalStreet,
-                suburb,
-                postcode,
-                lat: undefined,
-                lng: undefined,
-                formatted
-              })
+              onSelectRef.current?.({ street: finalStreet, suburb, postcode, lat: undefined, lng: undefined, formatted })
               return
             }
             if (!inAustralia) {
-              // eslint-disable-next-line no-console
               console.warn("[Checkout] Selected place appears to be outside Australia; ignoring coords.", { lat, lng })
               onChangeRef.current?.(finalStreet)
-              onSelectRef.current?.({
-                street: finalStreet,
-                suburb,
-                postcode,
-                lat: undefined,
-                lng: undefined,
-                formatted
-              })
+              onSelectRef.current?.({ street: finalStreet, suburb, postcode, lat: undefined, lng: undefined, formatted })
               return
             }
             onChangeRef.current?.(finalStreet)
             onSelectRef.current?.({ street: finalStreet, suburb, postcode, lat, lng, formatted })
           } catch (err) {
-            // eslint-disable-next-line no-console
             console.error("[Checkout] Error handling place selection", err)
           }
         }
@@ -749,7 +899,6 @@ function AddressAutocompleteField({ label, value, onChange, onSelect, error, pla
         elRef.current = el
       })
       .catch((err) => {
-        // eslint-disable-next-line no-console
         console.error("[Checkout] Google Maps load failed:", err)
         setUseFallback(true)
       })
@@ -757,9 +906,7 @@ function AddressAutocompleteField({ label, value, onChange, onSelect, error, pla
     return () => {
       cancelled = true
       if (elRef.current) {
-        try {
-          elRef.current.remove()
-        } catch {}
+        try { elRef.current.remove() } catch {}
         elRef.current = null
       }
     }
@@ -778,11 +925,7 @@ function AddressAutocompleteField({ label, value, onChange, onSelect, error, pla
           autoComplete={autoComplete}
         />
       ) : (
-        <div
-          ref={hostRef}
-          className={`place-autocomplete-host ${error ? "error" : ""}`}
-          aria-label={label}
-        />
+        <div ref={hostRef} className={`place-autocomplete-host ${error ? "error" : ""}`} aria-label={label} />
       )}
       {error ? <div className="err">{error}</div> : null}
       {useFallback && !hasGoogleMapsKey() ? (
@@ -814,22 +957,8 @@ function PhoneField({ label, value, onChange, error, autoComplete = "tel" }) {
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ marginBottom: 5, fontSize: 12, color: "var(--muted)", textTransform: "uppercase" }}>{label}</div>
-      <div
-        className={`input ${error ? "error" : ""}`}
-        style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px" }}
-      >
-        <span
-          aria-hidden="true"
-          style={{
-            width: 24,
-            height: 16,
-            borderRadius: 3,
-            overflow: "hidden",
-            border: "1px solid rgba(26,23,16,.18)",
-            display: "inline-flex",
-            flexShrink: 0
-          }}
-        >
+      <div className={`input ${error ? "error" : ""}`} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px" }}>
+        <span aria-hidden="true" style={{ width: 24, height: 16, borderRadius: 3, overflow: "hidden", border: "1px solid rgba(26,23,16,.18)", display: "inline-flex", flexShrink: 0 }}>
           <svg viewBox="0 0 24 16" width="24" height="16" role="img">
             <rect width="24" height="16" fill="#012169" />
             <rect x="0" y="0" width="11" height="8" fill="#012169" />
@@ -843,18 +972,7 @@ function PhoneField({ label, value, onChange, error, autoComplete = "tel" }) {
             <circle cx="20.2" cy="12.2" r="1.4" fill="#fff" />
           </svg>
         </span>
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: ".06em",
-            padding: "3px 6px",
-            borderRadius: 999,
-            border: "1px solid rgba(26,23,16,.2)",
-            color: "var(--ink-soft)",
-            background: "rgba(255,255,255,.72)"
-          }}
-        >
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".06em", padding: "3px 6px", borderRadius: 999, border: "1px solid rgba(26,23,16,.2)", color: "var(--ink-soft)", background: "rgba(255,255,255,.72)" }}>
           AU
         </span>
         <span style={{ color: "var(--muted)", fontWeight: 600 }}>+61</span>
@@ -865,7 +983,16 @@ function PhoneField({ label, value, onChange, error, autoComplete = "tel" }) {
           onChange={(e) => onChange(e.target.value)}
           placeholder="04XX XXX XXX"
           autoComplete={autoComplete}
-          style={{ border: 0, outline: "none", flex: 1, minWidth: 0, background: "transparent", font: "inherit", color: "inherit" }}
+          style={{
+            border: 0,
+            outline: "none",
+            flex: 1,
+            minWidth: 0,
+            background: "transparent",
+            fontSize: 16,
+            color: "inherit",
+            padding: 0
+          }}
         />
       </div>
       {error ? <div className="err">{error}</div> : null}

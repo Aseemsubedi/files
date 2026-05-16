@@ -23,6 +23,8 @@ COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/styles ./styles
 COPY --from=builder /app/next.config.js ./next.config.js
 COPY --from=builder /app/server.js ./server.js
+# Static files (favicon, Stripe Apple Pay domain association under .well-known/, etc.)
+COPY --from=builder /app/public ./public
 COPY --from=builder /app/orders.json ./orders.json
 COPY --from=builder /app/menu-availability.json ./menu-availability.json
 COPY --from=builder /app/store-status.json ./store-status.json

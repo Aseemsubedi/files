@@ -25,7 +25,7 @@ export default function BottomSheet({ item, catId, onClose, onAdd }) {
     }
     if (isMilkshakeCustom) {
       const milkCost = MILKSHAKE_MILK_CHOICES.find((m) => m.id === milk)?.price || 0
-      return base + milkCost + totalAddon(extras, BUBBLE_TEA_TOPPINGS.options)
+      return base + milkCost
     }
     const milkCost = ADDONS.milk.find((m) => m.id === milk)?.price || 0
     return base + milkCost + totalAddon(syrups, ADDONS.syrups) + totalAddon(extras, ADDONS.extras)
@@ -144,23 +144,13 @@ export default function BottomSheet({ item, catId, onClose, onAdd }) {
                 </Section>
               </>
             ) : isMilkshakeCustom ? (
-              <>
-                <Section title="Milk Choice">
-                  {MILKSHAKE_MILK_CHOICES.map((choice) => (
-                    <Chip key={choice.id} onClick={() => setMilk(choice.id)} active={milk === choice.id}>
-                      {choice.label} {choice.price ? `+${formatMoney(choice.price)}` : ""}
-                    </Chip>
-                  ))}
-                </Section>
-
-                <Section title={`Toppings (${formatMoney(BUBBLE_TEA_TOPPINGS.unitPrice)} each)`}>
-                  {BUBBLE_TEA_TOPPINGS.options.map((topping) => (
-                    <Chip key={topping.id} onClick={() => toggle(topping.id, setExtras, extras)} active={extras.includes(topping.id)}>
-                      {topping.label}
-                    </Chip>
-                  ))}
-                </Section>
-              </>
+              <Section title="Milk Choice">
+                {MILKSHAKE_MILK_CHOICES.map((choice) => (
+                  <Chip key={choice.id} onClick={() => setMilk(choice.id)} active={milk === choice.id}>
+                    {choice.label} {choice.price ? `+${formatMoney(choice.price)}` : ""}
+                  </Chip>
+                ))}
+              </Section>
             ) : (
               <>
                 <Section title="Milk">
@@ -231,9 +221,9 @@ export default function BottomSheet({ item, catId, onClose, onAdd }) {
                 sugar: item.noCustomisation ? null : isBubbleTeaCustom ? sugar : isMilkshakeCustom ? null : toLabel("sugar", sugar),
                 ice: item.noCustomisation ? null : isBubbleTeaCustom ? ice : null,
                 syrups: item.noCustomisation || isBubbleTeaCustom || isMilkshakeCustom ? [] : syrups.map((id) => toLabel("syrups", id)),
-                extras: item.noCustomisation
+                extras: item.noCustomisation || isMilkshakeCustom
                   ? []
-                  : isBubbleTeaCustom || isMilkshakeCustom
+                  : isBubbleTeaCustom
                     ? extras.map((id) => BUBBLE_TEA_TOPPINGS.options.find((x) => x.id === id)?.label).filter(Boolean)
                     : extras.map((id) => toLabel("extras", id)),
                 qty,
