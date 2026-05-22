@@ -1,16 +1,16 @@
-import fs from "fs"
-import path from "path"
 import Stripe from "stripe"
 import { isAdminRequestAuthenticated } from "../../lib/adminAuth"
-import { ADDONS, BUBBLE_TEA_TOPPINGS, getBasePrice, MENU, MILKSHAKE_MILK_CHOICES } from "../../lib/menu"
-
-const ordersPath = path.join(process.cwd(), "orders.json")
+import { ADDONS, BUBBLE_TEA_TOPPINGS, getBasePrice, MILKSHAKE_MILK_CHOICES } from "../../lib/menu"
+import { getResolvedMenuCatalog } from "../../lib/menuPrices"
+import { readOrders, writeOrders } from "../../lib/ordersStore"
 const looksLikePlaceholder = (value) => !value || /x{6,}/i.test(value)
 
-const menuById = Object.values(MENU).flat().reduce((acc, item) => {
-  acc[item.id] = item
-  return acc
-}, {})
+function getMenuById() {
+  return Object.values(getResolvedMenuCatalog()).flat().reduce((acc, item) => {
+    acc[item.id] = item
+    return acc
+  }, {})
+}
 
 const milkPriceByLabel = Object.fromEntries(
   [...ADDONS.milk, ...MILKSHAKE_MILK_CHOICES].map((x) => [x.label, Number(x.price || 0)])
@@ -18,17 +18,6 @@ const milkPriceByLabel = Object.fromEntries(
 const syrupPriceByLabel = Object.fromEntries(ADDONS.syrups.map((x) => [x.label, Number(x.price || 0)]))
 const extrasPriceByLabel = Object.fromEntries(ADDONS.extras.map((x) => [x.label, Number(x.price || 0)]))
 const bubbleToppingPriceByLabel = Object.fromEntries(BUBBLE_TEA_TOPPINGS.options.map((x) => [x.label, Number(x.price || 0)]))
-
-function readOrders() {
-  if (!fs.existsSync(ordersPath)) return []
-  const content = fs.readFileSync(ordersPath, "utf8")
-  if (!content.trim()) return []
-  return JSON.parse(content)
-}
-
-function writeOrders(orders) {
-  fs.writeFileSync(ordersPath, JSON.stringify(orders, null, 2))
-}
 
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY || ""
@@ -41,7 +30,7 @@ function toMoney(value) {
 }
 
 function computeLineFromCatalog(item) {
-  const catalogItem = menuById[item?.id]
+  const catalogItem = getMenuById()[item?.id]
   if (!catalogItem) return null
 
   const qty = Math.max(1, Number(item.qty || 1))

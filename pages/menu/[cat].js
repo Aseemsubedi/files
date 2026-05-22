@@ -6,7 +6,7 @@ import CartPanel from "../../components/CartPanel"
 import DrinkIcon from "../../components/DrinkIcon"
 import Nav from "../../components/Nav"
 import { useCart } from "../../lib/cartContext"
-import { CATEGORIES, formatMoney, hasBothSizes, MENU } from "../../lib/menu"
+import { applyMenuPriceOverrides, CATEGORIES, formatMoney, hasBothSizes, MENU } from "../../lib/menu"
 
 export default function MenuPage({ initialCat = "" }) {
   const router = useRouter()
@@ -15,12 +15,16 @@ export default function MenuPage({ initialCat = "" }) {
   const [openItem, setOpenItem] = useState(null)
   const [filter, setFilter] = useState("all")
   const [availabilityMap, setAvailabilityMap] = useState({})
+  const [priceOverrides, setPriceOverrides] = useState({})
 
   const category = CATEGORIES[cat]
   const isFood = cat === "food"
   const isDesserts = cat === "desserts"
   const isSimpleCategory = isDesserts || isFood
-  const allItems = MENU[cat] || []
+  const allItems = useMemo(
+    () => (MENU[cat] || []).map((item) => applyMenuPriceOverrides(item, priceOverrides[item.id])),
+    [cat, priceOverrides]
+  )
   const items = useMemo(() => {
     if (filter === "single") return allItems.filter((i) => !hasBothSizes(i))
     if (filter === "multi") return allItems.filter((i) => hasBothSizes(i))
@@ -40,10 +44,13 @@ export default function MenuPage({ initialCat = "" }) {
 
   useEffect(() => {
     let mounted = true
-    fetch("/api/menu-availability")
-      .then((res) => res.json())
-      .then((json) => {
-        if (mounted && json && typeof json === "object") setAvailabilityMap(json)
+    Promise.all([fetch("/api/menu-availability"), fetch("/api/menu-prices")])
+      .then(async ([availabilityRes, pricesRes]) => {
+        const availabilityJson = await availabilityRes.json().catch(() => ({}))
+        const pricesJson = await pricesRes.json().catch(() => ({}))
+        if (!mounted) return
+        if (availabilityJson && typeof availabilityJson === "object") setAvailabilityMap(availabilityJson)
+        if (pricesJson && typeof pricesJson === "object") setPriceOverrides(pricesJson)
       })
       .catch(() => {})
     return () => {
