@@ -2,13 +2,14 @@ import Head from "next/head"
 import { useRouter } from "next/router"
 import { useEffect } from "react"
 import Footer from "../components/Footer"
+import InstallAppBanner from "../components/InstallAppBanner"
 import { CartProvider } from "../lib/cartContext"
 import { registerRiverdaleServiceWorker } from "../lib/registerServiceWorker"
 import "../styles/globals.css"
 
 export default function App({ Component, pageProps }) {
   const router = useRouter()
-  const compactFooter = router.pathname.startsWith("/admin")
+  const isAdmin = router.pathname.startsWith("/admin")
 
   useEffect(() => {
     registerRiverdaleServiceWorker()
@@ -32,7 +33,8 @@ export default function App({ Component, pageProps }) {
       </Head>
       <CartProvider>
         <Component {...pageProps} />
-        <Footer compact={compactFooter} />
+        <Footer compact={isAdmin} />
+        <InstallAppBanner hidden={isAdmin} />
       </CartProvider>
     </>
   )
