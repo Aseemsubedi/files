@@ -19,6 +19,24 @@ const applePayAssociationHeaders = [
   }
 ]
 
+const pwaAssetHeaders = [
+  {
+    source: "/manifest.webmanifest",
+    headers: [
+      { key: "Content-Type", value: "application/manifest+json; charset=utf-8" },
+      { key: "Cache-Control", value: "public, max-age=3600" }
+    ]
+  },
+  {
+    source: "/sw.js",
+    headers: [
+      { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+      { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+      { key: "Service-Worker-Allowed", value: "/" }
+    ]
+  }
+]
+
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
@@ -40,11 +58,12 @@ const nextConfig = {
     // edit — `immutable` makes browsers keep stale JS so CSS-in-JS/webpack
     // style injection breaks (purple default links, "unstyled" pages).
     if (process.env.NODE_ENV !== "production") {
-      return applePayAssociationHeaders
+      return [...applePayAssociationHeaders, ...pwaAssetHeaders]
     }
 
     return [
       ...applePayAssociationHeaders,
+      ...pwaAssetHeaders,
       {
         source: "/_next/static/:path*",
         headers: [
