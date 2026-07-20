@@ -2,6 +2,8 @@ import Stripe from "stripe"
 import { isAdminRequestAuthenticated } from "../../lib/adminAuth"
 import { ADDONS, BUBBLE_TEA_TOPPINGS, getBasePrice, MILKSHAKE_MILK_CHOICES } from "../../lib/menu"
 import { getResolvedMenuCatalog } from "../../lib/menuPrices"
+import { notifyNewOrderWhatsApp } from "../../lib/notifyOrder"
+import { notifyOrderEmails } from "../../lib/sendEmail"
 import { readOrders, writeOrders } from "../../lib/ordersStore"
 const looksLikePlaceholder = (value) => !value || /x{6,}/i.test(value)
 
@@ -120,6 +122,8 @@ export default async function handler(req, res) {
       const orders = readOrders()
       orders.push(order)
       writeOrders(orders)
+      notifyNewOrderWhatsApp(order).catch(() => {})
+      notifyOrderEmails(order).catch(() => {})
       res.status(201).json(order)
       return
     }

@@ -24,6 +24,8 @@ export default function AdminMenuPage() {
   const [priceDrafts, setPriceDrafts] = useState({})
   const [savingPriceId, setSavingPriceId] = useState("")
   const [expandedCats, setExpandedCats] = useState({})
+  const [testingWhatsApp, setTestingWhatsApp] = useState(false)
+  const [testingEmail, setTestingEmail] = useState(false)
 
   const unavailableCount = useMemo(
     () => Object.values(MENU).flat().filter((item) => availabilityMap[item.id] === false).length,
@@ -266,6 +268,36 @@ export default function AdminMenuPage() {
     setExpandedCats((prev) => ({ ...prev, [catId]: !prev[catId] }))
   }
 
+  const testWhatsApp = async () => {
+    setTestingWhatsApp(true)
+    setNotice("")
+    try {
+      const res = await fetch("/api/admin/test-whatsapp", { method: "POST" })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || json.detail || "Test failed")
+      setNotice(json.message || "Test WhatsApp sent — check your phone.")
+    } catch (err) {
+      alert(err.message || "Could not send test WhatsApp")
+    } finally {
+      setTestingWhatsApp(false)
+    }
+  }
+
+  const testEmail = async () => {
+    setTestingEmail(true)
+    setNotice("")
+    try {
+      const res = await fetch("/api/admin/test-email", { method: "POST" })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || json.detail || "Test failed")
+      setNotice(json.message || "Test email sent — check your inbox.")
+    } catch (err) {
+      alert(err.message || "Could not send test email")
+    } finally {
+      setTestingEmail(false)
+    }
+  }
+
   return (
     <AdminShell>
         <AdminHeader
@@ -308,6 +340,31 @@ export default function AdminMenuPage() {
                   />
                   <span>{storeOpen ? "Open" : "Closed"}</span>
                 </label>
+              </div>
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+                <p className="admin-row-sub" style={{ marginBottom: 8 }}>
+                  New orders alert your phone via <strong>SMS</strong> and email via <strong>Resend</strong>.
+                  WhatsApp needs sandbox join: send your Twilio <code>join …</code> code to{" "}
+                  <strong>+1 415 523 8886</strong>.
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary admin-btn-sm"
+                    disabled={testingWhatsApp}
+                    onClick={testWhatsApp}
+                  >
+                    {testingWhatsApp ? "Sending…" : "Test SMS / WhatsApp"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary admin-btn-sm"
+                    disabled={testingEmail}
+                    onClick={testEmail}
+                  >
+                    {testingEmail ? "Sending…" : "Test email"}
+                  </button>
+                </div>
               </div>
             </section>
 
