@@ -2098,6 +2098,10 @@ gmp-place-autocomplete::part(prediction-item):hover {
   text-overflow: ellipsis;
 }
 
+.pwa-install-bar--open .pwa-install-copy span {
+  white-space: normal;
+}
+
 .pwa-install-action {
   flex-shrink: 0;
   border: 0;
@@ -2132,6 +2136,19 @@ gmp-place-autocomplete::part(prediction-item):hover {
 .pwa-install-dismiss:hover {
   color: var(--ink);
   background: rgba(26, 23, 16, 0.06);
+}
+
+.pwa-install-steps {
+  max-width: 680px;
+  margin: 8px auto 0;
+  padding: 0 0 2px 22px;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.pwa-install-steps li + li {
+  margin-top: 4px;
 }
 
 @media (min-width: 900px) {
