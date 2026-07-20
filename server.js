@@ -48,7 +48,14 @@ const next = require("next")
 
 const port = Number.parseInt(process.env.PORT, 10) || 3000
 const dev = process.env.NODE_ENV !== "production"
-const app = next({ dev })
+
+const buildDir = path.join(__dirname, ".next")
+if (!dev && !fs.existsSync(buildDir)) {
+  console.error("Missing .next build output. On Hostinger run Build (npm run build) then Start (node server.js).")
+  process.exit(1)
+}
+
+const app = next({ dev, conf: { distDir: ".next" } })
 const handle = app.getRequestHandler()
 
 app
@@ -69,8 +76,14 @@ app
       process.exit(1)
     })
 
+    // Bind without an explicit host. Hostinger/LSWS sets PORT; an explicit
+    // 0.0.0.0 here previously caused multi-worker port clashes (503 loops).
     server.listen(port, () => {
-      console.log(`> Ready on http://localhost:${port} (NODE_ENV=${process.env.NODE_ENV || "development"})`)
+      const hasStripe = !!(process.env.STRIPE_SECRET_KEY && process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+      const hasResend = !!process.env.RESEND_API_KEY
+      console.log(
+        `> Ready on port ${port} (NODE_ENV=${process.env.NODE_ENV || "development"}; stripe=${hasStripe ? "yes" : "missing"}; resend=${hasResend ? "yes" : "missing"})`
+      )
     })
   })
   .catch((err) => {

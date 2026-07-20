@@ -17,13 +17,11 @@
   "dependencies": {
     "@stripe/react-stripe-js": "^2.8.1",
     "@stripe/stripe-js": "^4.4.0",
+    "cross-env": "^7.0.3",
     "next": "^14.2.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "resend": "^6.17.2",
     "stripe": "^16.8.0"
-  },
-  "devDependencies": {
-    "cross-env": "^7.0.3"
   }
 }
