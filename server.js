@@ -8,7 +8,42 @@
 //   and avoids setting a hostname so LSWS's HOSTNAME override cannot confuse
 //   Node's listen() call.
 
+const fs = require("fs")
 const http = require("http")
+const path = require("path")
+
+// Hostinger Git deploys often omit devDependencies — never rely on cross-env.
+if (!process.env.NODE_ENV) process.env.NODE_ENV = "production"
+
+/**
+ * Load .env-style files if present. Does not override vars already set in the
+ * Hostinger panel (panel/process env wins). Helps when a .env was uploaded on the server.
+ */
+function loadEnvFile(filename) {
+  const filePath = path.join(__dirname, filename)
+  if (!fs.existsSync(filePath)) return
+  const text = fs.readFileSync(filePath, "utf8")
+  for (const rawLine of text.split(/\n/)) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith("#")) continue
+    const eq = line.indexOf("=")
+    if (eq <= 0) continue
+    const key = line.slice(0, eq).trim()
+    let value = line.slice(eq + 1).trim()
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+    if (key && process.env[key] === undefined) process.env[key] = value
+  }
+}
+
+loadEnvFile(".env")
+loadEnvFile(".env.production")
+loadEnvFile(".env.local")
+
 const next = require("next")
 
 const port = Number.parseInt(process.env.PORT, 10) || 3000

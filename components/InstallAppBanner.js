@@ -15,9 +15,13 @@ function getPlatform() {
 
 function isStandaloneApp() {
   if (typeof window === "undefined") return false
-  const media = window.matchMedia("(display-mode: standalone)").matches
-  const iosStandalone = window.navigator.standalone === true
-  return media || iosStandalone
+  try {
+    const media = window.matchMedia("(display-mode: standalone)").matches
+    const iosStandalone = window.navigator.standalone === true
+    return media || iosStandalone
+  } catch {
+    return false
+  }
 }
 
 export default function InstallAppBanner({ hidden = false }) {

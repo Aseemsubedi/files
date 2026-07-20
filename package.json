@@ -12,7 +12,7 @@
     "dev:3001": "cross-env PORT=3001 npm run dev",
     "check:port": "node scripts/preflight-port.js",
     "build": "next build",
-    "start": "cross-env NODE_ENV=production node server.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^2.8.1",
